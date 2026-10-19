@@ -25,3 +25,9 @@ Fluxos reconstruídos via endpoint autenticado: cadastro/login, credenciamento c
 19 testes de domínio executados e aprovados. TypeScript sem erros após corrigir declarações CSS ausentes da base. Emuladores e build web em validação; não declarados aprovados neste checkpoint.
 
 Limitações de arquitetura: estado agregado privado em Firestore para esta demonstração pequena, limites explícitos de volume/tamanho, fuso de Brasília fixado em UTC−03, sem migração de dados reais. Todo cancelamento feito pelo instrutor antes do início conta para o alerta de cinco cancelamentos. Suspensão administrativa padrão: sete dias, com análise.
+
+## Validação final
+
+Executado scripts/Verificar.ps1 com saída 0: 19 testes de domínio, TypeScript sem erros, 7 testes integrados aprovados e build web com 23 rotas. Conferidos no navegador os três perfis, fluxo solicitação/aceite/pagamento simulado, bloqueio do horário ocupado, conclusão histórica, avaliações bilaterais, favoritos, chat e suporte administrativo. Corrigido aviso de renderização no chat e revalidada a aba. Detalhes e limites em docs/VALIDACAO.md.
+
+Conexão de backend ao Firestore configurada via REST local com autenticação exclusiva do emulador, após diagnóstico de travamento do gRPC neste Windows. Discovery timeout ajustado para início frio. Node configurado para IPv4, evitando listener exclusivo em ::1. Metro ignora ferramentas portáteis e limita workers a dois.

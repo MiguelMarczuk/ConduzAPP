@@ -1,4 +1,4 @@
-. "$PSScriptRoot\scripts\ambiente.ps1"
+﻿. "$PSScriptRoot\scripts\ambiente.ps1"
 function PortOpen([int]$port) {
   $client = New-Object System.Net.Sockets.TcpClient
   try { $client.Connect('127.0.0.1', $port); return $true } catch { return $false } finally { $client.Dispose() }
@@ -9,7 +9,7 @@ if (-not (PortOpen 4400)) {
  Write-Output "Iniciando emuladores (PID $($p.Id))."
 }
 $ready = $false
-for ($i=0;$i -lt 180;$i++) { if ((PortOpen 5001) -and (PortOpen 8080) -and (PortOpen 9099) -and (PortOpen 9199)) { $ready=$true;break }; if ( % 15 -eq 0) { Write-Output 'Aguardando inicialização do Firebase local…' }; Start-Sleep -Seconds 2 }
+for ($i=0;$i -lt 180;$i++) { if ((PortOpen 5001) -and (PortOpen 8080) -and (PortOpen 9099) -and (PortOpen 9199)) { $ready=$true;break }; if ($i % 15 -eq 0) { Write-Output 'Aguardando inicialização do Firebase local…' }; Start-Sleep -Seconds 2 }
 if (-not $ready) { throw 'Emuladores ainda indisponíveis. Consulte .tools\emulators.err.log e tente novamente.' }
 & node scripts/seed-demo.cjs
 if ($LASTEXITCODE -ne 0) { throw 'Não foi possível preparar a base fictícia.' }
@@ -19,4 +19,3 @@ if (-not (PortOpen 8081)) {
  Write-Output "Iniciando aplicativo (PID $($p.Id))."
 }
 Write-Output 'Aplicativo: http://localhost:8081 | Emuladores: http://127.0.0.1:4000'
-

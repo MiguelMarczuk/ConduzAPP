@@ -1,4 +1,4 @@
-. "$PSScriptRoot\ambiente.ps1"
+﻿. "$PSScriptRoot\ambiente.ps1"
 & node --test tests/domain.test.cjs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & node node_modules/typescript/bin/tsc --noEmit

@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $projectRoot
 $nodeFolder = Get-ChildItem -LiteralPath (Join-Path $projectRoot '.tools\node') -Directory | Select-Object -First 1
@@ -9,3 +9,5 @@ $env:JAVA_HOME = $javaFolder.FullName
 $env:FIREBASE_CLI_DISABLE_MOTD = '1'
 $env:CI = '1'
 $env:npm_config_cache = Join-Path $projectRoot '.tools\npm-cache'
+$env:FUNCTIONS_DISCOVERY_TIMEOUT = '60'
+$env:NODE_OPTIONS = '--dns-result-order=ipv4first'
