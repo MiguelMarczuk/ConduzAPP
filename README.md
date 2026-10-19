@@ -1,56 +1,64 @@
-# Welcome to your Expo app 👋
+# ConduzAPP — recuperação do TCC
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Aplicativo Expo/React Native com três perfis, Firebase local e pagamentos simulados.
 
-## Get started
+## Executar neste notebook
 
-1. Install dependencies
+Na pasta do projeto, execute no PowerShell:
 
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Iniciar-ConduzAPP.ps1
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Aplicativo: http://localhost:8081. Painel Firebase local: http://127.0.0.1:4000.
 
-### Other setup steps
+As ferramentas portáteis ficam em `.tools`, sem alterar instalações do Windows. Em uma cópia nova, prepare primeiro:
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Preparar-Ambiente.ps1
+```
 
-## Learn more
+## Contas fictícias
 
-To learn more about developing your project with Expo, look at the following resources:
+| Perfil | E-mail | Senha de demonstração |
+|---|---|---|
+| Aluno | aluno@conduzapp.test | DemoTCC2026! |
+| Instrutor | instrutor@conduzapp.test | DemoTCC2026! |
+| Administração | admin@conduzapp.test | DemoTCC2026! |
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+O primeiro início prepara a base se ela não existir. Reinícios preservam a base existente. As credenciais acima pertencem exclusivamente aos emuladores.
 
-## Join the community
+## Verificar
 
-Join our community of developers creating universal apps.
+Com os emuladores ativos e sem interagir no app durante os testes:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Verificar.ps1
+```
+
+Os testes de integração usam contas temporárias nos emuladores, guardam o estado anterior e o restauram ao terminar.
+
+Com Node 22 e npm no PATH também é possível executar `npm test`, `npm run typecheck`, `npm run test:emulators` e `npm run build:web`.
+
+## Arquitetura de recuperação
+
+- `src/app/painel.tsx`: fluxos de aluno, instrutor e administração.
+- `src/components`: componentes reutilizados de formulários, cartões e avaliações.
+- `src/services/session.tsx`: sessão e chamadas autenticadas.
+- `src/services/firebase.ts`: conexões exclusivas aos emuladores.
+- `functions/domain.js`: regras puras de negócio testadas.
+- `functions/index.js`: endpoint autenticado, transação Firestore e autorização.
+- `firestore.rules`: impede leitura e escrita direta pelo cliente.
+- `storage.rules`: fotos de contestação privadas para participantes e administração.
+
+O backend usa um documento agregado privado e transações para serializar as mutações desta demonstração pequena. Há limites de quantidade/tamanho. Esta estrutura prioriza recuperação e verificabilidade local; exige migração para coleções particionadas antes de escalar para produção. Os campos de acesso às fotos são espelhados pelo servidor. Não há migração de dados reais ou leitura do Firebase antigo.
+
+Preço em centavos, comissão arredondada no backend, horário de Brasília (UTC−03), novas aulas de 60 minutos. Reservas antigas mantêm valor e duração. Remarcação não altera a reserva até aceite e revalida conflitos.
+
+## Restrições
+
+Nenhum deploy, push, transferência financeira, cobrança real ou integração automática com Detran. Credenciamento manual com validade e suspensão. Aprovação administrativa depende de custom claim provisionada apenas pelo seed local. Functions recusam execução fora dos emuladores. Recuperação exclusiva na branch `recuperacao-tcc`.
+
+Protótipos visuais originais ainda não foram fornecidos; a identidade azul e branca foi preservada com componentes existentes.
+
+Veja [roteiro da apresentação](docs/DEMONSTRACAO.md) e [registro da recuperação](RECUPERACAO.md).

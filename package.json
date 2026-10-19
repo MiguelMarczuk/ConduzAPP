@@ -1,5 +1,5 @@
 {
-  "name": "cnhconnect",
+  "name": "conduzapp",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
@@ -30,16 +30,23 @@
     "react-native-worklets": "0.8.3"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@types/react": "~19.2.2",
+    "firebase-tools": "^15.34.0",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",
-    "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test": "node --test tests/domain.test.cjs",
+    "typecheck": "tsc --noEmit",
+    "test:emulators": "node --test tests/emulators.test.cjs",
+    "build:web": "expo export --platform web",
+    "emulators": "firebase emulators:start --project demo-conduzapp",
+    "seed:demo": "node scripts/seed-demo.cjs"
   },
   "private": true
 }

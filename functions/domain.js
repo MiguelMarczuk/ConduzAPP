@@ -23,6 +23,7 @@ function validSlot(state, instructor, start, duration, now, ignoreId) {
   check(approved(u, now), 'Instrutor sem aprovação válida ou suspenso.');
   check(Number.isFinite(start) && start > now && start < now + 7 * DAY, 'Escolha um horário futuro nos próximos sete dias.');
   check(start % HOUR === 0 && Number.isInteger(duration) && duration > 0, 'A aula deve começar em hora cheia.');
+  check(u.credentialExpires >= start + duration * 60000, 'Autorização profissional vence antes da aula.');
   const date = localDate(start);
   const weekday = new Date(start - 3 * HOUR).getUTCDay();
   const hour = localHour(start);
@@ -108,7 +109,7 @@ function execute(original, actor, op, input = {}, now = Date.now(), id = 'operat
         s.bookings[id] = { id, student: actor.uid, instructor: input.instructor, start: input.start, duration: 60, price: u.price, commission: Math.round(u.price * 3 / 100), status: 'solicitado', paid: false, paymentMode: 'simulado', location: text(input.location,300), createdAt: now, ratings: {}, payoutEligible: false };
         break;
       }
-      case 'accept': instructor(); check(b.status === 'solicitado', 'Solicitação já processada.'); b.status = 'aguardando_pagamento'; break;
+      case 'accept': instructor(); check(b.status === 'solicitado' && b.start > now, 'Solicitação já processada ou expirada.'); b.status = 'aguardando_pagamento'; break;
       case 'pay': student(); check(b.status === 'aguardando_pagamento' && b.start > now, 'Pagamento indisponível.'); check(approved(s.users[b.instructor],now), 'Instrutor sem autorização válida.'); Object.assign(b,{ paid:true, status:'confirmado', paidAt:now }); break;
       case 'cancel': {
         participant(); check(active(b) && !['concluido'].includes(b.status) && now < b.start, 'Cancelamento indisponível.');
@@ -137,6 +138,7 @@ function execute(original, actor, op, input = {}, now = Date.now(), id = 'operat
       case 'confirm': student(); check(b.status === 'concluido','Aula ainda não concluída.'); b.studentConfirmed = true; break;
       case 'eligibility':
         participant(); check(b.status === 'concluido' && b.paid && now > end(b) + DAY && !b.disputeOpen, 'Aguarde a janela de contestação e a análise de disputas.');
+        check(!b.refund || (b.refund < b.price && b.refundStatus === 'concluido_simulado'), 'Estorno integral ou pendente impede elegibilidade.');
         b.payoutEligible = true; break;
       case 'review': {
         participant(); check(b.status === 'concluido' && b.paid && now >= end(b), 'Avalie somente aulas concluídas e pagas.');
@@ -184,7 +186,10 @@ function execute(original, actor, op, input = {}, now = Date.now(), id = 'operat
     }
   }
   if (op !== 'message') s.audit.push({id,by:actor.uid,op,at:now});
+  check(Buffer.byteLength(JSON.stringify(s), 'utf8') < 850000, 'Limite de armazenamento da demonstração atingido.');
   check(s.audit.length < 2000 && Object.keys(s.bookings).length < 300, 'Limite do ambiente de demonstração atingido.');
   return { state:s, result:view(s,actor,now), write:true };
 }
 module.exports = { execute, empty, slots, validSlot, approved, end, HOUR, DAY };
+
+

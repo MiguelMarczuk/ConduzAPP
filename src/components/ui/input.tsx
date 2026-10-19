@@ -24,6 +24,7 @@ export function Input({ label, icon, error, isPassword, style, ...rest }: InputP
         ]}>
         {icon ? <ThemedText style={styles.icon}>{icon}</ThemedText> : null}
         <TextInput
+          accessibilityLabel={label || rest.placeholder}
           style={[styles.input, { color: theme.text }, style]}
           placeholderTextColor={theme.textSecondary}
           secureTextEntry={hidden}
@@ -55,3 +56,4 @@ const styles = StyleSheet.create({
   input: { flex: 1, paddingVertical: 15, fontSize: 16 },
   error: { fontSize: 12, marginLeft: 4 },
 });
+

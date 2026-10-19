@@ -114,3 +114,13 @@ test('mensagens e reservas são privadas para terceiros',()=>{
  assert.throws(()=>act(s,{uid:'other'},'message',{to:'teacher',text:'Intruso'}),/Solicite/);
  const v=execute(s,{uid:'other'},'state',{},now).result;assert.deepEqual(v.bookings,{});assert.deepEqual(v.messages,[]);assert.equal(v.users.teacher.credential,undefined);
 });
+
+test('aceite expirado e credencial vencendo antes da aula são recusados',()=>{
+ assert.throws(()=>act(booked(),teacher,'accept',{booking:'b1'},start),/expirada/);
+ const s=fixture();s.users.teacher.credentialExpires=start-1;assert.throws(()=>act(s,actor,'book',{instructor:'teacher',start}),/vence/);
+});
+test('estorno integral ou pendente impede elegibilidade',()=>{
+ let s=act(paid(),teacher,'complete',{booking:'b1'},start+HOUR);s.bookings.b1.refund=9999;s.bookings.b1.refundStatus='concluido_simulado';
+ assert.throws(()=>act(s,teacher,'eligibility',{booking:'b1'},start+26*HOUR),/Estorno/);
+ s.bookings.b1.refund=100;s.bookings.b1.refundStatus='pendente_simulado';assert.throws(()=>act(s,teacher,'eligibility',{booking:'b1'},start+26*HOUR),/Estorno/);
+});

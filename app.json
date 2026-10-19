@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "CNHConnect",
-    "slug": "CNHConnect",
+    "name": "ConduzAPP",
+    "slug": "conduzapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",

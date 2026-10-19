@@ -34,7 +34,7 @@ export function Button({ title, variant = 'primary', loading, disabled, style, .
   };
 
   return (
-    <TouchableOpacity
+    <TouchableOpacity accessibilityRole="button"
       style={[
         styles.base,
         {
@@ -69,3 +69,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+

@@ -17,3 +17,11 @@ Sem deploy/push, dados reais, cobranças ou transferências. Credenciamento manu
 4. Testes, build e verificação visual.
 
 Este registro não representa conclusão antecipada.
+
+## Checkpoint de implementação
+
+Fluxos reconstruídos via endpoint autenticado: cadastro/login, credenciamento com validade, disponibilidade semanal e bloqueios, busca/favoritos, reservas, aceite, pagamento simulado, cancelamento, proposta/aceite de remarcação, conclusão, avaliações bilaterais, mensagens, suporte/disputas e estornos administrativos simulados. Fotos de disputa usam Storage privado. Rotas anteriores encaminham ao painel recuperado; versões originais permanecem no histórico Git.
+
+19 testes de domínio executados e aprovados. TypeScript sem erros após corrigir declarações CSS ausentes da base. Emuladores e build web em validação; não declarados aprovados neste checkpoint.
+
+Limitações de arquitetura: estado agregado privado em Firestore para esta demonstração pequena, limites explícitos de volume/tamanho, fuso de Brasília fixado em UTC−03, sem migração de dados reais. Todo cancelamento feito pelo instrutor antes do início conta para o alerta de cinco cancelamentos. Suspensão administrativa padrão: sete dias, com análise.
