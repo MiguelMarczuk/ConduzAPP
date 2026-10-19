@@ -1,0 +1,18 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function participant(booking) {
+      let b = firestore.get(/databases/(default)/documents/bookingAccess/$(booking)).data;
+      return request.auth != null && (request.auth.uid == b.student || request.auth.uid == b.instructor);
+    }
+    match /disputes/{booking}/{owner}/{file} {
+      allow read: if request.auth != null && (request.auth.token.admin == true || participant(booking));
+      allow create: if request.auth != null && request.auth.uid == owner && participant(booking)
+        && firestore.get(/databases/(default)/documents/bookingAccess/$(booking)).data.disputeOpen == true
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow update, delete: if false;
+    }
+    match /{allPaths=**} { allow read, write: if false; }
+  }
+}
