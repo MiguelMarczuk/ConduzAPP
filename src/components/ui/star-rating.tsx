@@ -1,8 +1,8 @@
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
-import { ThemedText } from '@/components/themed-text';
-import { useTheme } from '@/hooks/use-theme';
+import { StyleSheet, TouchableOpacity, View } from "react-native";
+import { ThemedText } from "@/components/themed-text";
+import { useTheme } from "@/hooks/use-theme";
 
-const LABELS = ['', 'Muito ruim', 'Ruim', 'Regular', 'Muito bom', 'Excelente!'];
+const LABELS = ["", "Muito ruim", "Ruim", "Regular", "Muito bom", "Excelente!"];
 
 type StarRatingProps = {
   nota: number;
@@ -11,7 +11,12 @@ type StarRatingProps = {
   showLabel?: boolean;
 };
 
-export function StarRating({ nota, onChange, size = 40, showLabel }: StarRatingProps) {
+export function StarRating({
+  nota,
+  onChange,
+  size = 40,
+  showLabel,
+}: StarRatingProps) {
   const theme = useTheme();
   const interativo = !!onChange;
 
@@ -21,8 +26,27 @@ export function StarRating({ nota, onChange, size = 40, showLabel }: StarRatingP
         {[1, 2, 3, 4, 5].map((estrela) => {
           const Estrela = interativo ? TouchableOpacity : View;
           return (
-            <Estrela key={estrela} onPress={interativo ? () => onChange?.(estrela) : undefined}>
-              <ThemedText style={{ fontSize: size, color: nota >= estrela ? theme.warning : theme.border }}>
+            <Estrela
+              key={estrela}
+              accessibilityRole={interativo ? "button" : undefined}
+              accessibilityLabel={`${estrela} ${estrela === 1 ? "estrela" : "estrelas"}`}
+              accessibilityState={
+                interativo ? { selected: nota === estrela } : undefined
+              }
+              style={{
+                minWidth: interativo ? 44 : undefined,
+                minHeight: interativo ? 44 : undefined,
+                alignItems: "center",
+              }}
+              onPress={interativo ? () => onChange?.(estrela) : undefined}
+            >
+              <ThemedText
+                style={{
+                  fontSize: size,
+                  lineHeight: size + 10,
+                  color: nota >= estrela ? theme.primary : theme.border,
+                }}
+              >
                 ★
               </ThemedText>
             </Estrela>
@@ -30,18 +54,32 @@ export function StarRating({ nota, onChange, size = 40, showLabel }: StarRatingP
         })}
       </View>
       {showLabel && nota > 0 ? (
-        <ThemedText style={[styles.label, { color: theme.warning }]}>{LABELS[nota]}</ThemedText>
+        <ThemedText style={[styles.label, { color: theme.text }]}>
+          {LABELS[nota]}
+        </ThemedText>
       ) : null}
     </View>
   );
 }
 
-export function StarDisplay({ nota, size = 14 }: { nota: number; size?: number }) {
+export function StarDisplay({
+  nota,
+  size = 14,
+}: {
+  nota: number;
+  size?: number;
+}) {
   const theme = useTheme();
   return (
     <View style={styles.linha}>
       {[1, 2, 3, 4, 5].map((estrela) => (
-        <ThemedText key={estrela} style={{ fontSize: size, color: estrela <= Math.round(nota) ? theme.warning : theme.border }}>
+        <ThemedText
+          key={estrela}
+          style={{
+            fontSize: size,
+            color: estrela <= Math.round(nota) ? theme.warning : theme.border,
+          }}
+        >
           ★
         </ThemedText>
       ))}
@@ -50,7 +88,7 @@ export function StarDisplay({ nota, size = 14 }: { nota: number; size?: number }
 }
 
 const styles = StyleSheet.create({
-  wrapper: { alignItems: 'center', gap: 8 },
-  linha: { flexDirection: 'row', gap: 4 },
-  label: { fontWeight: '700', fontSize: 16 },
+  wrapper: { alignItems: "center", gap: 8 },
+  linha: { flexDirection: "row", gap: 4 },
+  label: { fontWeight: "700", fontSize: 16 },
 });

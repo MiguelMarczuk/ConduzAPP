@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Image,
   ScrollView,
-  StyleSheet,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -27,6 +26,11 @@ import { Avatar } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { StarRating } from "@/components/ui/star-rating";
+import { Icon, type IconName } from "@/components/ui/icon";
+import { Badge } from "@/components/ui/badge";
+import { MenuRow } from "@/components/ui/menu-row";
+import { UI } from "@/constants/theme";
+import { panelStyles as s } from "@/constants/panel-styles";
 const labels: Record<string, string> = {
   solicitado: "Solicitação enviada",
   aguardando_pagamento: "Aguardando pagamento",
@@ -35,6 +39,13 @@ const labels: Record<string, string> = {
   concluido: "Concluída",
   falta_aluno: "Falta do aluno",
   falta_instrutor: "Falta do instrutor",
+};
+const tabIcons: Record<string, IconName> = {
+  Início: "home",
+  Agendamentos: "calendar",
+  Mensagens: "message",
+  Ocorrências: "shield",
+  Perfil: "user",
 };
 const weekdays = [
   "Domingo",
@@ -82,7 +93,7 @@ function RatingSummary({ uid }: { uid: string }) {
   return (
     <Text style={s.muted}>
       {reviews.length
-        ? `★ ${(reviews.reduce((n, r) => n + r.rating, 0) / reviews.length).toFixed(1)} · ${reviews.length} avaliações`
+        ? `★ ${(reviews.reduce((n, r) => n + r.rating, 0) / reviews.length).toFixed(1)} · ${reviews.length} ${reviews.length === 1 ? "avaliação" : "avaliações"}`
         : "Ainda sem avaliações"}
     </Text>
   );
@@ -96,11 +107,16 @@ export default function Painel() {
     to?: string;
   }>();
   const [tab, setTab] = useState(params.tab || "Início");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [messageTo, setMessageTo] = useState(params.to);
   const [showNotifications, setShowNotifications] = useState(false);
   const [selected, setSelected] = useState<string | null>(
     params.instructor || null,
   );
+  const scrollRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [tab, selected, showNotifications]);
   const me = api.state?.me;
   if (api.loading)
     return (
@@ -137,29 +153,41 @@ export default function Painel() {
   return (
     <SafeAreaView style={s.page}>
       <View style={s.top}>
-        <View>
-          <Text style={s.brand}>
-            CONDUZ<Text style={{ color: "#668DF5" }}>APP</Text>
-          </Text>
-          <Text style={s.small}>AMBIENTE LOCAL · PAGAMENTOS SIMULADOS</Text>
-        </View>
-        <View>
-          <TouchableOpacity onPress={api.refresh}>
-            <Text style={s.link}>Atualizar</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setShowNotifications(!showNotifications)}
-          >
-            <Text style={s.link}>
-              Notificações (
-              {
+        <View style={s.topInner}>
+          <View>
+            <Text style={s.brand}>
+              CONDUZ<Text style={s.brandAccent}> APP</Text>
+            </Text>
+            <Text style={s.demoLabel}>DEMONSTRAÇÃO · PAGAMENTOS SIMULADOS</Text>
+          </View>
+          <View style={s.headerActions}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Atualizar"
+              onPress={api.refresh}
+              style={s.iconButton}
+            >
+              <Icon name="refresh" color="white" size={20} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={
+                "Notificações (" +
                 Object.values(api.state!.notifications || {}).filter(
                   (n) => !n.readAt,
-                ).length
+                ).length +
+                ")"
               }
-              )
-            </Text>
-          </TouchableOpacity>
+              accessibilityState={{ expanded: showNotifications }}
+              onPress={() => setShowNotifications(!showNotifications)}
+              style={s.iconButton}
+            >
+              <Icon name="bell" color="white" size={22} />
+              {Object.values(api.state!.notifications || {}).some(
+                (n) => !n.readAt,
+              ) && <View style={s.notificationDot} />}
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
       {!!api.error && (
@@ -173,6 +201,7 @@ export default function Painel() {
         </TouchableOpacity>
       )}
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={s.content}
         keyboardShouldPersistTaps="handled"
       >
@@ -191,6 +220,7 @@ export default function Painel() {
             {tab === "Início" &&
               (me.role === "aluno" ? (
                 <Search
+                  initialFavorites={favoritesOnly}
                   selected={selected}
                   select={setSelected}
                   onChat={(to) => {
@@ -202,32 +232,79 @@ export default function Painel() {
                 <InstructorHome goBookings={() => setTab("Agendamentos")} />
               ))}
             {tab === "Agendamentos" && <Bookings />}
+            {tab === "Avaliações" && (
+              <ReviewsPage goBack={() => setTab("Perfil")} />
+            )}
             {tab === "Mensagens" && (
               <Messages key={me.id} initialTo={messageTo} />
             )}
-            {tab === "Perfil" && <Profile />}
+            {tab === "Perfil" && (
+              <Profile
+                navigate={(target) => {
+                  if (target === "Notificações") {
+                    setShowNotifications(true);
+                    return;
+                  }
+                  setFavoritesOnly(target === "Favoritos");
+                  setSelected(null);
+                  setTab(target === "Favoritos" ? "Início" : target);
+                }}
+              />
+            )}
           </>
         )}
       </ScrollView>
       <View style={s.tabs}>
-        {tabs.map((t, i) => (
-          <TouchableOpacity
-            key={t}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === t }}
-            onPress={() => {
-              api.clear();
-              setTab(t);
-              setSelected(null);
-            }}
-            style={[s.tab, tab === t && s.tabActive]}
-          >
-            <Text style={[s.tabIcon, tab === t && s.link]}>
-              {["⌂", "▦", "✉", "○"][i]}
-            </Text>
-            <Text style={[s.tabLabel, tab === t && s.link]}>{t}</Text>
-          </TouchableOpacity>
-        ))}
+        <View style={s.tabsInner}>
+          {tabs.map((t) => (
+            <TouchableOpacity
+              key={t}
+              accessibilityRole="tab"
+              accessibilityState={{
+                selected: tab === t || (tab === "Avaliações" && t === "Perfil"),
+              }}
+              onPress={() => {
+                api.clear();
+                setTab(t);
+                setSelected(null);
+                setFavoritesOnly(false);
+                setShowNotifications(false);
+              }}
+              style={[
+                s.tab,
+                (tab === t || (tab === "Avaliações" && t === "Perfil")) &&
+                  s.tabActive,
+              ]}
+            >
+              <View
+                style={[
+                  s.navIcon,
+                  (tab === t || (tab === "Avaliações" && t === "Perfil")) &&
+                    s.navIconActive,
+                ]}
+              >
+                <Icon
+                  name={tabIcons[t]}
+                  color={
+                    tab === t || (tab === "Avaliações" && t === "Perfil")
+                      ? UI.color.primary
+                      : UI.color.textSecondary
+                  }
+                  size={22}
+                />
+              </View>
+              <Text
+                style={[
+                  s.tabLabel,
+                  (tab === t || (tab === "Avaliações" && t === "Perfil")) &&
+                    s.link,
+                ]}
+              >
+                {t}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -245,7 +322,14 @@ function Notifications({ goBookings }: { goBookings: () => void }) {
       )}
       {list.map((n) => (
         <Card key={n.id} style={s.gap}>
-          <Text style={s.cardTitle}>{n.title}</Text>
+          <View style={s.sectionHeading}>
+            <Icon name="bell" size={20} />
+            <Text style={[s.cardTitle, s.flex]}>{n.title}</Text>
+            <Badge
+              title={n.readAt ? "Lida" : "Nova"}
+              tone={n.readAt ? "neutral" : "primary"}
+            />
+          </View>
           <Text style={s.small}>
             {dateTime(n.at)} · {n.readAt ? "Lida" : "Não lida"}
           </Text>
@@ -279,170 +363,407 @@ function CompleteProfile() {
     </Card>
   );
 }
+const datePart = (time: number, options: Intl.DateTimeFormatOptions) =>
+  new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    ...options,
+  }).format(time);
+const dayKey = (time: number) =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(time);
 function Search({
   selected,
   select,
   onChat,
+  initialFavorites = false,
 }: {
   selected: string | null;
   select: (id: string | null) => void;
   onChat: (id: string) => void;
+  initialFavorites?: boolean;
 }) {
-  const { state, run } = useSession();
-  const [search, setSearch] = useState(""),
-    [onlyFavorites, setOnlyFavorites] = useState(false);
-  const [slot, setSlot] = useState<number | null>(null),
-    [location, setLocation] = useState("");
+  const { state, run, busy } = useSession();
+  const [search, setSearch] = useState("");
+  const [onlyFavorites, setOnlyFavorites] = useState(initialFavorites);
+  const [slot, setSlot] = useState<number | null>(null);
+  const [chosenDay, setChosenDay] = useState("");
+  const [showDetails, setShowDetails] = useState(false);
+  const [location, setLocation] = useState("");
   const me = state!.me!;
   const instructors = Object.values(state!.users).filter(
     (u) => u.role === "instrutor" && u.approval === "aprovado",
   );
+  const visible = instructors.filter(
+    (u) =>
+      (u.name + " " + u.region).toLowerCase().includes(search.toLowerCase()) &&
+      (!onlyFavorites || (me.favorites || []).includes(u.id)),
+  );
   const u = selected ? state!.users[selected] : null;
+  const days = Array.from({ length: 7 }, (_, i) => state!.now + i * 86400000);
+  const activeDay = days.some((d) => dayKey(d) === chosenDay)
+    ? chosenDay
+    : dayKey(u?.slots?.[0] || days[0]);
+  const activeSlot =
+    slot && u?.slots?.includes(slot) && dayKey(slot) === activeDay
+      ? slot
+      : null;
   if (u)
     return (
       <View style={s.gap}>
-        <Action
-          title="← Voltar à busca"
-          onPress={() => {
-            select(null);
-            setSlot(null);
-          }}
-        />
-        <Card style={s.gap}>
-          <Avatar nome={u.name} size={72} />
-          <Heading
-            title={u.name}
-            sub={`${u.region || "Região não informada"} · ${u.car || "Veículo não informado"} · ${u.transmission || "Câmbio não informado"}`}
-          />
-          <RatingSummary uid={u.id} />
-          <Text>{u.bio || "Perfil profissional de instrutor."}</Text>
-          <Text style={s.link}>
-            Autorização profissional analisada manualmente
-          </Text>
-          <Text style={s.price}>{money(u.price)} / aula de 60 min</Text>
-          <Action
-            title="Conversar com o instrutor"
-            onPress={async () => {
-              if (await run("openConversation", { to: u.id })) onChat(u.id);
+        <View style={s.sectionHeading}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Voltar à busca"
+            onPress={() => {
+              select(null);
+              setSlot(null);
+              setChosenDay("");
+              setShowDetails(false);
             }}
-          />
-          <Action
-            title={
-              (me.favorites || []).includes(u.id)
-                ? "♥ Remover dos favoritos"
-                : "♡ Adicionar aos favoritos"
-            }
-            onPress={() => run("favorite", { instructor: u.id })}
-          />
-        </Card>
-        <Heading
-          title="Escolha sua próxima aula"
-          sub="Horários dos próximos sete dias, no fuso de Brasília."
-        />
-        <View style={s.row}>
-          {(u.slots || []).map((time) => (
+            style={s.iconButton}
+          >
+            <Icon name="back" size={22} />
+          </TouchableOpacity>
+          <Heading title="Novo agendamento" />
+        </View>
+        <Card style={s.gap}>
+          <View style={s.instructor}>
+            <Avatar nome={u.name} size={64} />
+            <View style={s.flex}>
+              <Text style={s.cardTitle}>{u.name}</Text>
+              <Text style={s.muted}>
+                {u.car || "Veículo não informado"} ·{" "}
+                {u.transmission || "Câmbio não informado"}
+              </Text>
+              <RatingSummary uid={u.id} />
+            </View>
+          </View>
+          <View style={s.row}>
+            <Badge title="Credenciamento aprovado" tone="success" />
+            <Text style={s.price}>
+              {money(u.price)} <Text style={s.small}>/ 60 min</Text>
+            </Text>
+          </View>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showDetails }}
+            onPress={() => setShowDetails(!showDetails)}
+            style={s.detailsToggle}
+          >
+            <Text style={s.link}>Perfil profissional</Text>
+            <Icon name="chevron" size={15} />
+          </TouchableOpacity>
+          {showDetails && (
+            <View style={s.gap}>
+              <Text style={s.muted}>
+                {u.region || "Região não informada"} ·{" "}
+                {u.bio || "Perfil profissional de instrutor."}
+              </Text>
+              <Text style={s.small}>
+                Autorização profissional analisada manualmente.
+              </Text>
+            </View>
+          )}
+          <View style={s.row}>
+            <Action
+              title="Conversar com o instrutor"
+              onPress={async () => {
+                if (await run("openConversation", { to: u.id })) onChat(u.id);
+              }}
+            />
             <TouchableOpacity
-              key={time}
-              onPress={() => setSlot(time)}
-              style={[s.slot, slot === time && s.slotActive]}
+              accessibilityRole="button"
+              accessibilityLabel={
+                (me.favorites || []).includes(u.id)
+                  ? "Remover dos favoritos"
+                  : "Adicionar aos favoritos"
+              }
+              onPress={() => run("favorite", { instructor: u.id })}
+              style={s.favorite}
             >
-              <Text style={slot === time ? s.white : s.link}>
-                {dateTime(time)}
+              <Icon
+                name="heart"
+                color={
+                  (me.favorites || []).includes(u.id)
+                    ? UI.color.dangerText
+                    : UI.color.primary
+                }
+              />
+              <Text style={s.link}>
+                {(me.favorites || []).includes(u.id)
+                  ? "Favoritado"
+                  : "Favoritar"}
               </Text>
             </TouchableOpacity>
-          ))}
-        </View>
-        {!u.slots?.length && (
-          <Card>
+          </View>
+        </Card>
+        <Card style={s.sectionCard}>
+          <View style={s.sectionHeading}>
+            <Icon name="calendar" />
+            <Text style={s.cardTitle}>Selecionar data</Text>
+          </View>
+          <Text style={s.small}>Próximos sete dias · horário de Brasília</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={s.dateStrip}
+          >
+            {days.map((day) => {
+              const key = dayKey(day),
+                available = (u.slots || []).some(
+                  (time) => dayKey(time) === key,
+                );
+              return (
+                <TouchableOpacity
+                  key={key}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    datePart(day, {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                    }) + (available ? "" : ", sem horários")
+                  }
+                  accessibilityState={{
+                    selected: key === activeDay,
+                    disabled: !available,
+                  }}
+                  disabled={!available}
+                  style={[
+                    s.dateChip,
+                    key === activeDay && s.slotActive,
+                    !available && s.unavailable,
+                  ]}
+                  onPress={() => {
+                    setChosenDay(key);
+                    setSlot(null);
+                  }}
+                >
+                  <Text style={[s.small, key === activeDay && s.white]}>
+                    {datePart(day, { weekday: "short" }).replace(".", "")}
+                  </Text>
+                  <Text style={[s.dateNumber, key === activeDay && s.white]}>
+                    {datePart(day, { day: "2-digit" })}
+                  </Text>
+                  <Text style={[s.small, key === activeDay && s.white]}>
+                    {datePart(day, { month: "short" }).replace(".", "")}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+          <View style={s.divider} />
+          <View style={s.sectionHeading}>
+            <Icon name="clock" />
+            <Text style={s.cardTitle}>Selecionar horário</Text>
+          </View>
+          <View style={s.row}>
+            {(u.slots || [])
+              .filter((time) => dayKey(time) === activeDay)
+              .map((time) => (
+                <TouchableOpacity
+                  key={time}
+                  accessibilityRole="button"
+                  accessibilityLabel={datePart(time, {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                  accessibilityState={{ selected: activeSlot === time }}
+                  onPress={() => setSlot(time)}
+                  style={[s.slot, activeSlot === time && s.slotActive]}
+                >
+                  <Text style={activeSlot === time ? s.white : s.link}>
+                    {datePart(time, { hour: "2-digit", minute: "2-digit" })}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+          </View>
+          {!u.slots?.length && (
             <Text style={s.muted}>
               Nenhum horário disponível. O instrutor precisa configurar sua
               agenda.
             </Text>
-          </Card>
-        )}
-        <Input
-          label="Local de encontro"
-          value={location}
-          onChangeText={setLocation}
-        />
-        <Button
-          title={
-            slot ? `Solicitar aula · ${money(u.price)}` : "Selecione um horário"
-          }
-          disabled={!slot}
-          onPress={async () => {
-            if (
-              await run("book", { instructor: u.id, start: slot, location })
-            ) {
-              setSlot(null);
-              select(null);
+          )}
+          <View style={s.divider} />
+          <Input
+            label="Local da aula"
+            leadingIcon="pin"
+            placeholder="Endereço ou ponto de encontro"
+            value={location}
+            onChangeText={setLocation}
+          />
+          <View style={s.summary}>
+            <View style={s.flex}>
+              <Text style={s.small}>Sua aula · 60 minutos</Text>
+              <Text style={s.cardTitle}>
+                {activeSlot ? dateTime(activeSlot) : "Selecione data e horário"}
+              </Text>
+            </View>
+            <Text style={s.price}>{money(u.price)}</Text>
+          </View>
+          <Button
+            title={
+              activeSlot
+                ? "Solicitar aula · " + money(u.price)
+                : "Selecione um horário"
             }
-          }}
-        />
-        <Text style={s.muted}>
-          O pagamento simulado fica disponível após o aceite do instrutor.
-          Comissão da plataforma: 3%.
-        </Text>
+            disabled={!activeSlot || busy}
+            onPress={async () => {
+              if (
+                await run("book", {
+                  instructor: u.id,
+                  start: activeSlot,
+                  location,
+                })
+              ) {
+                setSlot(null);
+                setChosenDay("");
+                select(null);
+              }
+            }}
+          />
+          <Text style={s.small}>
+            A solicitação depende do aceite do instrutor. O pagamento simulado
+            fica disponível depois do aceite. Comissão da plataforma: 3%.
+          </Text>
+        </Card>
         <Reviews uid={u.id} />
       </View>
     );
   return (
     <View style={s.gap}>
-      <View style={s.hero}>
-        <Text style={s.eyebrow}>VAMOS PARA O PRÓXIMO PASSO</Text>
-        <Text style={s.heroTitle}>
-          Olá, {me.name.split(" ")[0]}.{"\n"}Mais confiança ao dirigir.
-        </Text>
-        <Text style={s.white}>
-          Encontre um profissional e planeje sua próxima aula.
+      <View style={s.welcome}>
+        <Text style={s.title}>Olá, {me.name.split(" ")[0]}!</Text>
+        <Text style={s.welcomeText}>
+          Encontre o instrutor ideal para suas aulas.
         </Text>
       </View>
-      <Heading
-        title="Encontre seu instrutor"
-        sub="Profissionais com credenciamento analisado pela administração."
-      />
       <Input
-        label="Buscar por nome ou região"
-        placeholder="Ex.: Centro, Niterói…"
+        leadingIcon="search"
+        placeholder="Buscar instrutor ou região…"
+        accessibilityLabel="Buscar por nome ou região"
         value={search}
         onChangeText={setSearch}
       />
-      <Action
-        title={onlyFavorites ? "Mostrar todos" : "Mostrar favoritos"}
-        onPress={() => setOnlyFavorites(!onlyFavorites)}
-      />
-      {instructors
-        .filter(
-          (u) =>
-            `${u.name} ${u.region}`
-              .toLowerCase()
-              .includes(search.toLowerCase()) &&
-            (!onlyFavorites || (me.favorites || []).includes(u.id)),
-        )
-        .map((u) => (
-          <TouchableOpacity key={u.id} onPress={() => select(u.id)}>
-            <Card style={s.instructor}>
-              <Avatar nome={u.name} />
+      <View style={s.quickFilters}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityState={{ selected: !onlyFavorites }}
+          onPress={() => setOnlyFavorites(false)}
+          style={s.quickFilter}
+        >
+          <View style={[s.quickIcon, !onlyFavorites && s.quickIconActive]}>
+            <Icon
+              name="car"
+              color={!onlyFavorites ? "#fff" : UI.color.primary}
+              size={25}
+            />
+          </View>
+          <Text style={s.quickLabel}>Aulas avulsas</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityState={{ selected: onlyFavorites }}
+          onPress={() => setOnlyFavorites(true)}
+          style={s.quickFilter}
+        >
+          <View style={[s.quickIcon, onlyFavorites && s.quickIconActive]}>
+            <Icon
+              name="heart"
+              color={onlyFavorites ? "#fff" : UI.color.primary}
+              size={25}
+            />
+          </View>
+          <Text style={s.quickLabel}>Favoritos</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={() => {
+            setOnlyFavorites(false);
+            setSearch("");
+          }}
+          style={s.quickFilter}
+        >
+          <View style={s.quickIcon}>
+            <Icon name="user" size={25} />
+          </View>
+          <Text style={s.quickLabel}>Instrutores</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={s.sectionHeading}>
+        <Text style={[s.cardTitle, s.flex]}>
+          {onlyFavorites ? "Seus favoritos" : "Instrutores em destaque"}
+        </Text>
+        <Text style={s.small}>
+          {visible.length}{" "}
+          {visible.length === 1 ? "profissional" : "profissionais"}
+        </Text>
+      </View>
+      {visible.map((u) => (
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={"Ver perfil de " + u.name}
+          key={u.id}
+          onPress={() => {
+            setSlot(null);
+            setChosenDay("");
+            select(u.id);
+          }}
+          activeOpacity={0.75}
+        >
+          <Card style={s.gap}>
+            <View style={s.instructor}>
+              <Avatar nome={u.name} size={58} />
               <View style={s.flex}>
                 <Text style={s.cardTitle}>{u.name}</Text>
-                <Text style={s.muted}>
+                <Text style={s.small}>
                   {u.region || "Região não informada"}
                 </Text>
-                <Text style={s.small}>
-                  {u.car} · {u.transmission}
-                </Text>
                 <RatingSummary uid={u.id} />
-                <Text style={s.price}>{money(u.price)} / aula</Text>
               </View>
-              <Text style={s.link}>Ver perfil ›</Text>
-            </Card>
-          </TouchableOpacity>
-        ))}
-      {!instructors.length && (
-        <Card>
-          <Text>Nenhum instrutor aprovado disponível.</Text>
+              <Icon name="chevron" size={18} />
+            </View>
+            <View style={s.vehicleLine}>
+              <Icon name="car" size={18} color={UI.color.textSecondary} />
+              <Text style={s.muted}>
+                {u.car || "Veículo não informado"} ·{" "}
+                {u.transmission || "Câmbio não informado"}
+              </Text>
+            </View>
+            <View style={s.cardFooter}>
+              <Text style={s.price}>
+                {money(u.price)} <Text style={s.small}>/ aula</Text>
+              </Text>
+              <Text style={s.link}>Ver perfil e horários</Text>
+            </View>
+          </Card>
+        </TouchableOpacity>
+      ))}
+      {!visible.length && (
+        <Card style={s.empty}>
+          <Icon name={onlyFavorites ? "heart" : "search"} size={30} />
+          <Text style={s.cardTitle}>
+            {onlyFavorites
+              ? "Seus favoritos ficam aqui"
+              : "Nenhum instrutor encontrado"}
+          </Text>
+          <Text style={s.muted}>
+            {onlyFavorites
+              ? "Toque em Favoritar no perfil de um instrutor."
+              : "Tente buscar por outro nome ou região."}
+          </Text>
         </Card>
       )}
+      <View style={s.trustNote}>
+        <Icon name="shield" size={18} color={UI.color.textSecondary} />
+        <Text style={[s.small, s.flex]}>
+          Profissionais com credenciamento analisado pela administração.
+        </Text>
+      </View>
     </View>
   );
 }
@@ -543,7 +864,7 @@ function Availability() {
         }
       />
       {periods.map((p, i) => (
-        <View style={s.row} key={`${p.day}-${p.from}-${i}`}>
+        <View style={s.period} key={`${p.day}-${p.from}-${i}`}>
           <Text style={s.flex}>
             {weekdays[p.day]} · {p.from}:00–{p.to}:00
           </Text>
@@ -603,20 +924,28 @@ function BookingCard({ booking: b }: { booking: Booking }) {
   const now = state!.now;
   const [expand, setExpand] = useState(false),
     [reason, setReason] = useState(""),
-    [rating, setRating] = useState(5),
-    [comment, setComment] = useState(""),
     [newStart, setNewStart] = useState("");
   const other = state!.users[student ? b.instructor : b.student];
   return (
     <Card style={s.gap}>
       <View style={s.row}>
+        <Avatar nome={other?.name || "Aula"} size={48} />
         <View style={s.flex}>
           <Text style={s.cardTitle}>{other?.name || "Aula"}</Text>
           <Text style={s.muted}>
             {dateTime(b.start)} · {b.duration} min
           </Text>
         </View>
-        <Text style={s.badge}>{labels[b.status] || b.status}</Text>
+        <Badge
+          title={labels[b.status] || b.status}
+          tone={
+            b.status === "confirmado" || b.status === "concluido"
+              ? "success"
+              : b.status === "cancelado" || b.status.startsWith("falta")
+                ? "danger"
+                : "warning"
+          }
+        />
       </View>
       <View style={s.row}>
         <Text style={s.price}>{money(b.price)}</Text>
@@ -625,10 +954,13 @@ function BookingCard({ booking: b }: { booking: Booking }) {
           {b.paid ? "Pagamento simulado confirmado" : "Sem pagamento"}
         </Text>
       </View>
-      <Text style={s.small}>
-        {b.location || "Local a combinar"}
-        {b.disputeOpen ? " · Em disputa" : ""}
-      </Text>
+      <View style={s.vehicleLine}>
+        <Icon name="pin" size={17} color={UI.color.textSecondary} />
+        <Text style={s.small}>
+          {b.location || "Local a combinar"}
+          {b.disputeOpen ? " · Em disputa" : ""}
+        </Text>
+      </View>
       {b.refundStatus && (
         <Text style={s.muted}>
           Estorno {money(b.refund)} · {b.refundStatus.replaceAll("_", " ")}
@@ -730,23 +1062,7 @@ function BookingCard({ booking: b }: { booking: Booking }) {
           )}
           {b.status === "concluido" &&
             (student || teacher) &&
-            !b.ratings?.[me.id] && (
-              <>
-                <Text style={s.cardTitle}>Avalie sua experiência</Text>
-                <StarRating nota={rating} onChange={setRating} size={28} />
-                <Input
-                  label="Comentário"
-                  value={comment}
-                  onChangeText={setComment}
-                />
-                <Action
-                  title="Enviar avaliação"
-                  onPress={() =>
-                    run("review", { booking: b.id, rating, comment })
-                  }
-                />
-              </>
-            )}
+            !b.ratings?.[me.id] && <ReviewForm booking={b} />}
           {b.ratings?.[me.id] && (
             <Text>Você avaliou esta aula com {b.ratings[me.id]} estrelas.</Text>
           )}
@@ -897,6 +1213,7 @@ function Evidence({ booking: b }: { booking: Booking }) {
 function Messages({ initialTo }: { initialTo?: string }) {
   const { state, run } = useSession();
   const me = state!.me!;
+  const [search, setSearch] = useState("");
   const [to, setTo] = useState(initialTo || ""),
     [text, setText] = useState("");
   const pending = useRef<{
@@ -917,26 +1234,83 @@ function Messages({ initialTo }: { initialTo?: string }) {
         title="Mensagens"
         sub="Converse sobre suas aulas e o ponto de encontro."
       />
-      <View style={s.row}>
-        {participants.map((id) => (
-          <Action
-            key={id}
-            title={`${state!.users[id]?.name || "Participante"} · ${Object.values(state!.conversations).find((c) => [c.student, c.instructor].includes(id))?.tag || "SEM AGENDAMENTO"}`}
-            onPress={() => setTo(id)}
-          />
-        ))}
+      <Input
+        leadingIcon="search"
+        placeholder="Buscar conversa…"
+        accessibilityLabel="Buscar conversa"
+        value={search}
+        onChangeText={setSearch}
+      />
+      <View style={s.gap}>
+        {participants
+          .filter((id) =>
+            (state!.users[id]?.name || "Participante")
+              .toLowerCase()
+              .includes(search.toLowerCase()),
+          )
+          .map((id) => {
+            const name = state!.users[id]?.name || "Participante";
+            const tag =
+              Object.values(state!.conversations).find((c) =>
+                [c.student, c.instructor].includes(id),
+              )?.tag || "SEM AGENDAMENTO";
+            const last = state!.messages
+              .filter((msg) => [msg.from, msg.to].includes(id))
+              .slice(-1)[0];
+            return (
+              <TouchableOpacity
+                key={id}
+                accessibilityRole="button"
+                accessibilityLabel={"Conversa com " + name}
+                accessibilityState={{ selected: to === id }}
+                style={[s.conversation, to === id && s.conversationActive]}
+                onPress={() => setTo(id)}
+              >
+                <Avatar nome={name} size={48} />
+                <View style={s.conversationInfo}>
+                  <Text style={s.conversationName}>{name}</Text>
+                  <Text numberOfLines={1} style={s.small}>
+                    {last
+                      ? (last.from === me.id ? "Você: " : "") + last.text
+                      : "Comece a conversa sobre sua próxima aula."}
+                  </Text>
+                  <Badge
+                    title={tag}
+                    tone={tag === "AGENDADO" ? "success" : "neutral"}
+                  />
+                </View>
+                <Icon name="chevron" size={16} />
+              </TouchableOpacity>
+            );
+          })}
       </View>
+      {!!participants.length &&
+        !participants.some((id) =>
+          (state!.users[id]?.name || "Participante")
+            .toLowerCase()
+            .includes(search.toLowerCase()),
+        ) && <Text style={s.muted}>Nenhuma conversa encontrada.</Text>}
       {!participants.length && (
-        <Card>
-          <Text>
+        <Card style={s.empty}>
+          <Icon name="message" size={36} />
+          <Text style={s.cardTitle}>
+            Sua próxima aula começa com uma conversa
+          </Text>
+          <Text style={s.muted}>
             Abra o perfil de um instrutor aprovado e toque em Conversar com o
             instrutor.
           </Text>
         </Card>
       )}
       {!!to && (
-        <>
-          <Text style={s.cardTitle}>{state!.users[to]?.name}</Text>
+        <Card style={s.gap}>
+          <View style={s.chatHeader}>
+            <Avatar nome={state!.users[to]?.name || "Participante"} size={40} />
+            <View style={s.flex}>
+              <Text style={s.cardTitle}>{state!.users[to]?.name}</Text>
+              <Text style={s.small}>Conversa privada entre participantes</Text>
+            </View>
+          </View>
           {state!.messages
             .filter((m) => [m.from, m.to].includes(to))
             .map((m) => (
@@ -954,6 +1328,7 @@ function Messages({ initialTo }: { initialTo?: string }) {
             ))}
           <Input
             label="Sua mensagem"
+            placeholder="Escreva sua mensagem…"
             value={text}
             onChangeText={setText}
             multiline
@@ -974,8 +1349,76 @@ function Messages({ initialTo }: { initialTo?: string }) {
               }
             }}
           />
-        </>
+        </Card>
       )}
+    </View>
+  );
+}
+function ReviewForm({ booking: b }: { booking: Booking }) {
+  const { state, run, busy } = useSession();
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState("");
+  const student = state!.me!.id === b.student;
+  return (
+    <View style={s.reviewForm}>
+      <Text style={s.reviewTitle}>
+        {student ? "Avalie seu instrutor" : "Avalie seu aluno"}
+      </Text>
+      <Text style={[s.small, { textAlign: "center" }]}>
+        {state!.users[student ? b.instructor : b.student]?.name} ·{" "}
+        {dateTime(b.start)}
+      </Text>
+      <StarRating nota={rating} onChange={setRating} size={36} showLabel />
+      <Input
+        label="Deixe seu comentário (opcional)"
+        placeholder="Conte como foi sua experiência…"
+        multiline
+        value={comment}
+        onChangeText={setComment}
+      />
+      <Button
+        title="Enviar avaliação"
+        disabled={busy}
+        onPress={() => run("review", { booking: b.id, rating, comment })}
+      />
+    </View>
+  );
+}
+function ReviewsPage({ goBack }: { goBack: () => void }) {
+  const { state } = useSession();
+  const me = state!.me!;
+  const pending = Object.values(state!.bookings).filter(
+    (b) =>
+      b.status === "concluido" &&
+      [b.student, b.instructor].includes(me.id) &&
+      !b.ratings?.[me.id],
+  );
+  return (
+    <View style={s.gap}>
+      <View style={s.sectionHeading}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Voltar ao perfil"
+          onPress={goBack}
+          style={s.iconButton}
+        >
+          <Icon name="back" size={22} />
+        </TouchableOpacity>
+        <Heading title="Avaliações" />
+      </View>
+      <Text style={s.muted}>
+        Compartilhe sua experiência e veja os feedbacks recebidos.
+      </Text>
+      {pending.map((b) => (
+        <ReviewForm key={b.id} booking={b} />
+      ))}
+      {!pending.length && (
+        <Text style={s.muted}>
+          Nenhuma aula pendente de avaliação. Você pode avaliar após a conclusão
+          da aula.
+        </Text>
+      )}
+      <Reviews uid={me.id} />
     </View>
   );
 }
@@ -984,21 +1427,50 @@ function Reviews({ uid }: { uid: string }) {
   const reviews = Object.values(state!.reviews).filter((r) => r.to === uid);
   return (
     <View style={s.gap}>
-      <Text style={s.cardTitle}>Avaliações recebidas</Text>
+      <View style={s.sectionHeading}>
+        <Icon name="star" />
+        <Text style={s.cardTitle}>Avaliações recebidas</Text>
+      </View>
       <RatingSummary uid={uid} />
-      {reviews.map((r) => (
-        <Card key={r.id}>
-          <Text style={s.link}>{"★".repeat(r.rating)}</Text>
-          <Text>{r.comment || "Sem comentário."}</Text>
+      {!reviews.length && (
+        <Card style={s.empty}>
+          <Icon name="star" size={32} />
+          <Text style={s.muted}>
+            As avaliações aparecerão aqui após as aulas.
+          </Text>
         </Card>
-      ))}
+      )}
+      {reviews.map((r) => {
+        const author = r.from ? state!.users[r.from]?.name : undefined;
+        return (
+          <Card key={r.id} style={s.gap}>
+            <View style={s.reviewHeader}>
+              <Avatar nome={author || "Participante"} size={42} />
+              <View style={s.flex}>
+                <Text style={s.conversationName}>
+                  {author || "Participante da aula"}
+                </Text>
+                <Text style={s.link}>
+                  {"★".repeat(r.rating)}
+                  {"☆".repeat(5 - r.rating)} · {r.rating.toFixed(1)}
+                </Text>
+              </View>
+            </View>
+            <Text style={s.reviewComment}>
+              {r.comment || "Sem comentário."}
+            </Text>
+          </Card>
+        );
+      })}
     </View>
   );
 }
-function Profile() {
+function Profile({ navigate }: { navigate?: (tab: string) => void }) {
   const { state, run } = useSession(),
     router = useRouter();
   const me = state!.me!;
+  const [section, setSection] = useState<string | null>(null);
+  const toggle = (key: string) => setSection(section === key ? null : key);
   const [name, setName] = useState(me.name),
     [region, setRegion] = useState(me.region || ""),
     [car, setCar] = useState(me.car || ""),
@@ -1011,53 +1483,143 @@ function Profile() {
     [reason, setReason] = useState("");
   return (
     <View style={s.gap}>
-      <Heading title="Seu perfil" sub={`${me.name} · ${me.role}`} />
-      <Card style={s.gap}>
-        <Input label="Nome" value={name} onChangeText={setName} />
-        <Input label="Região" value={region} onChangeText={setRegion} />
-        {me.role === "instrutor" && (
-          <>
-            <Input label="Veículo" value={car} onChangeText={setCar} />
-            <Input
-              label="Câmbio"
-              value={transmission}
-              onChangeText={setTransmission}
+      <View style={s.profileHero}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Editar perfil"
+          style={s.profileEdit}
+          onPress={() => toggle("edit")}
+        >
+          <Icon name="edit" color="white" size={22} />
+        </TouchableOpacity>
+        <View style={s.avatarRing}>
+          <Avatar nome={me.name} size={80} />
+        </View>
+        <Text style={s.profileName}>{me.name}</Text>
+        <Text style={s.profileRole}>
+          {me.role === "aluno"
+            ? "Aluno"
+            : me.role === "instrutor"
+              ? "Instrutor"
+              : "Administração"}
+        </Text>
+        {!!me.region && <Text style={s.profileRole}>{me.region}</Text>}
+      </View>
+      {!section && (
+        <Card style={s.menu}>
+          {navigate && (
+            <MenuRow
+              icon="calendar"
+              title="Meus agendamentos"
+              onPress={() => navigate("Agendamentos")}
             />
-            <Input
-              label="Especialidade"
-              value={specialty}
-              onChangeText={setSpecialty}
+          )}
+          {navigate && me.role === "aluno" && (
+            <MenuRow
+              icon="heart"
+              title="Favoritos"
+              onPress={() => navigate("Favoritos")}
             />
-            <Input
-              label="Sobre você"
-              value={bio}
-              onChangeText={setBio}
-              multiline
+          )}
+          <MenuRow
+            icon="edit"
+            title="Editar perfil"
+            expanded={section === "edit"}
+            onPress={() => toggle("edit")}
+          />
+          <MenuRow
+            icon="star"
+            title="Avaliações recebidas"
+            expanded={navigate ? undefined : section === "reviews"}
+            onPress={() =>
+              navigate ? navigate("Avaliações") : toggle("reviews")
+            }
+          />
+          {navigate && (
+            <MenuRow
+              icon="bell"
+              title="Notificações"
+              onPress={() => navigate("Notificações")}
             />
-            <Input
-              label="Preço da aula em R$"
-              value={price}
-              onChangeText={setPrice}
-              keyboardType="decimal-pad"
+          )}
+          {me.role === "instrutor" && (
+            <MenuRow
+              icon="shield"
+              title="Autorização profissional"
+              expanded={section === "credential"}
+              onPress={() => toggle("credential")}
             />
-          </>
-        )}
-        <Button
-          title="Salvar perfil"
-          onPress={() =>
-            run("profile", {
-              name,
-              region,
-              car,
-              transmission,
-              bio,
-              specialty,
-              price: Math.round(Number(price.replace(",", ".")) * 100),
-            })
-          }
-        />
-      </Card>
-      {me.role === "instrutor" && (
+          )}
+          <MenuRow
+            icon="help"
+            title="Ajuda e suporte"
+            expanded={section === "support"}
+            onPress={() => toggle("support")}
+          />
+        </Card>
+      )}
+      {section && (
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={() => setSection(null)}
+          style={s.back}
+        >
+          <Icon name="back" size={20} />
+          <Text style={s.link}>Voltar às opções do perfil</Text>
+        </TouchableOpacity>
+      )}
+      {section === "edit" && (
+        <Card style={s.gap}>
+          <Heading
+            title="Editar perfil"
+            sub="Mantenha suas informações atualizadas."
+          />
+          <Input label="Nome" value={name} onChangeText={setName} />
+          <Input label="Região" value={region} onChangeText={setRegion} />
+          {me.role === "instrutor" && (
+            <>
+              <Input label="Veículo" value={car} onChangeText={setCar} />
+              <Input
+                label="Câmbio"
+                value={transmission}
+                onChangeText={setTransmission}
+              />
+              <Input
+                label="Especialidade"
+                value={specialty}
+                onChangeText={setSpecialty}
+              />
+              <Input
+                label="Sobre você"
+                value={bio}
+                onChangeText={setBio}
+                multiline
+              />
+              <Input
+                label="Preço da aula em R$"
+                value={price}
+                onChangeText={setPrice}
+                keyboardType="decimal-pad"
+              />
+            </>
+          )}
+          <Button
+            title="Salvar perfil"
+            onPress={() =>
+              run("profile", {
+                name,
+                region,
+                car,
+                transmission,
+                bio,
+                specialty,
+                price: Math.round(Number(price.replace(",", ".")) * 100),
+              })
+            }
+          />
+        </Card>
+      )}
+      {me.role === "instrutor" && section === "credential" && (
         <Card style={s.gap}>
           <Heading
             title="Autorização profissional"
@@ -1084,31 +1646,33 @@ function Profile() {
           />
         </Card>
       )}
-      <Reviews uid={me.id} />
-      <Card style={s.gap}>
-        <Heading title="Ajuda e suporte" />
-        <Input
-          label="Descreva sua solicitação"
-          value={reason}
-          onChangeText={setReason}
-          multiline
-        />
-        <Button
-          title="Enviar ao suporte"
-          onPress={async () => {
-            if (await run("support", { reason })) setReason("");
-          }}
-        />
-        {Object.values(state!.tickets).map((t) => (
-          <View key={t.id}>
-            <Text>
-              {t.kind} · {t.status}
-            </Text>
-            <Text style={s.muted}>{t.reason}</Text>
-            {t.decision && <Text>Resposta: {t.decision}</Text>}
-          </View>
-        ))}
-      </Card>
+      {section === "reviews" && <Reviews uid={me.id} />}
+      {section === "support" && (
+        <Card style={s.gap}>
+          <Heading title="Ajuda e suporte" />
+          <Input
+            label="Descreva sua solicitação"
+            value={reason}
+            onChangeText={setReason}
+            multiline
+          />
+          <Button
+            title="Enviar ao suporte"
+            onPress={async () => {
+              if (await run("support", { reason })) setReason("");
+            }}
+          />
+          {Object.values(state!.tickets).map((t) => (
+            <View key={t.id}>
+              <Text>
+                {t.kind} · {t.status}
+              </Text>
+              <Text style={s.muted}>{t.reason}</Text>
+              {t.decision && <Text>Resposta: {t.decision}</Text>}
+            </View>
+          ))}
+        </Card>
+      )}
       <Button
         title="Sair da conta"
         variant="danger"
@@ -1276,105 +1840,3 @@ function TicketCard({ ticket: t }: { ticket: Ticket }) {
     </Card>
   );
 }
-const s = StyleSheet.create({
-  page: { flex: 1, backgroundColor: "#F3F6FC" },
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 20,
-    padding: 24,
-  },
-  content: {
-    padding: 20,
-    paddingBottom: 40,
-    width: "100%",
-    maxWidth: 1000,
-    alignSelf: "center",
-    gap: 16,
-  },
-  top: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderColor: "#E2E8F0",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  brand: { fontSize: 22, fontWeight: "800", color: "#1E56F0" },
-  small: { fontSize: 12, color: "#64748B", lineHeight: 19 },
-  heading: { gap: 6, marginVertical: 8 },
-  title: { fontSize: 25, lineHeight: 33, fontWeight: "800" },
-  muted: { fontSize: 14, lineHeight: 22, color: "#64748B" },
-  link: { color: "#1E56F0", fontWeight: "700" },
-  white: { color: "#fff" },
-  hero: { padding: 28, borderRadius: 24, backgroundColor: "#1E56F0", gap: 14 },
-  eyebrow: {
-    color: "#D4E2FF",
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1.5,
-  },
-  heroTitle: { color: "#fff", fontSize: 30, fontWeight: "800", lineHeight: 40 },
-  gap: { gap: 14 },
-  row: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: 12,
-  },
-  flex: { flex: 1, minWidth: 120 },
-  instructor: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-    flexWrap: "wrap",
-  },
-  cardTitle: { fontSize: 17, fontWeight: "700" },
-  price: { fontSize: 18, fontWeight: "800", color: "#164BC1" },
-  slot: {
-    padding: 12,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#CAD7EE",
-    borderRadius: 12,
-  },
-  slotActive: { backgroundColor: "#1E56F0", borderColor: "#1E56F0" },
-  chip: {
-    padding: 10,
-    borderWidth: 1,
-    borderColor: "#CAD7EE",
-    borderRadius: 10,
-  },
-  action: { paddingHorizontal: 16, paddingVertical: 11 },
-  metric: { flex: 1, minWidth: 130, gap: 8 },
-  number: { fontSize: 30, lineHeight: 38, color: "#1E56F0", fontWeight: "800" },
-  badge: {
-    fontSize: 12,
-    color: "#1E56F0",
-    backgroundColor: "#EBF1FF",
-    padding: 8,
-    borderRadius: 8,
-  },
-  tabs: {
-    flexDirection: "row",
-    backgroundColor: "#fff",
-    borderTopWidth: 1,
-    borderColor: "#E2E8F0",
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-  },
-  tab: { flex: 1, alignItems: "center", padding: 8, borderRadius: 12, gap: 2 },
-  tabActive: { backgroundColor: "#EBF1FF" },
-  tabLabel: { fontSize: 11, color: "#64748B" },
-  tabIcon: { fontSize: 22, color: "#64748B" },
-  errorBox: { padding: 12, backgroundColor: "#FEE2E2" },
-  error: { color: "#B91C1C", fontSize: 14 },
-  notice: { padding: 10, backgroundColor: "#E6F0FF" },
-  bubble: { padding: 16, borderRadius: 16, maxWidth: "88%", gap: 4 },
-  mine: { alignSelf: "flex-end", backgroundColor: "#1E56F0" },
-  theirs: { alignSelf: "flex-start", backgroundColor: "#fff" },
-});

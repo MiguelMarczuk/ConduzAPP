@@ -1,5 +1,6 @@
-import { StyleSheet, View, ViewProps } from 'react-native';
-import { useTheme } from '@/hooks/use-theme';
+import { StyleSheet, View, ViewProps } from "react-native";
+import { useTheme } from "@/hooks/use-theme";
+import { UI } from "@/constants/theme";
 
 export function Card({ style, ...rest }: ViewProps) {
   const theme = useTheme();
@@ -7,7 +8,7 @@ export function Card({ style, ...rest }: ViewProps) {
     <View
       style={[
         styles.card,
-        { backgroundColor: theme.surface, borderColor: theme.border, shadowColor: '#0F172A' },
+        { backgroundColor: theme.surface, borderColor: theme.border },
         style,
       ]}
       {...rest}
@@ -17,12 +18,9 @@ export function Card({ style, ...rest }: ViewProps) {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    ...UI.shadow,
+    borderRadius: UI.radius.card,
     borderWidth: 1,
-    padding: 16,
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
+    padding: UI.space.lg,
   },
 });

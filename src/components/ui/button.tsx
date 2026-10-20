@@ -1,8 +1,14 @@
-import { ActivityIndicator, StyleSheet, TouchableOpacity, TouchableOpacityProps } from 'react-native';
-import { ThemedText } from '@/components/themed-text';
-import { useTheme } from '@/hooks/use-theme';
+import {
+  ActivityIndicator,
+  StyleSheet,
+  TouchableOpacity,
+  TouchableOpacityProps,
+} from "react-native";
+import { ThemedText } from "@/components/themed-text";
+import { useTheme } from "@/hooks/use-theme";
+import { UI } from "@/constants/theme";
 
-export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'danger';
+export type ButtonVariant = "primary" | "secondary" | "outline" | "danger";
 
 type ButtonProps = TouchableOpacityProps & {
   title: string;
@@ -10,21 +16,28 @@ type ButtonProps = TouchableOpacityProps & {
   loading?: boolean;
 };
 
-export function Button({ title, variant = 'primary', loading, disabled, style, ...rest }: ButtonProps) {
+export function Button({
+  title,
+  variant = "primary",
+  loading,
+  disabled,
+  style,
+  ...rest
+}: ButtonProps) {
   const theme = useTheme();
   const isDisabled = disabled || loading;
 
   const backgrounds: Record<ButtonVariant, string> = {
     primary: theme.primary,
     secondary: theme.surface,
-    outline: 'transparent',
+    outline: "transparent",
     danger: theme.danger,
   };
   const textColors: Record<ButtonVariant, string> = {
-    primary: '#FFFFFF',
+    primary: "#FFFFFF",
     secondary: theme.primary,
     outline: theme.primary,
-    danger: '#FFFFFF',
+    danger: "#FFFFFF",
   };
   const borderColors: Record<ButtonVariant, string> = {
     primary: theme.primary,
@@ -34,24 +47,29 @@ export function Button({ title, variant = 'primary', loading, disabled, style, .
   };
 
   return (
-    <TouchableOpacity accessibilityRole="button"
+    <TouchableOpacity
+      accessibilityRole="button"
       style={[
         styles.base,
         {
           backgroundColor: backgrounds[variant],
           borderColor: borderColors[variant],
-          borderWidth: variant === 'secondary' || variant === 'outline' ? 1.5 : 0,
+          borderWidth: variant === "secondary" || variant === "outline" ? 1 : 0,
           opacity: isDisabled ? 0.5 : 1,
         },
         style,
       ]}
       disabled={isDisabled}
+      accessibilityState={{ disabled: !!isDisabled, busy: !!loading }}
       activeOpacity={0.8}
-      {...rest}>
+      {...rest}
+    >
       {loading ? (
         <ActivityIndicator color={textColors[variant]} />
       ) : (
-        <ThemedText style={[styles.text, { color: textColors[variant] }]}>{title}</ThemedText>
+        <ThemedText style={[styles.text, { color: textColors[variant] }]}>
+          {title}
+        </ThemedText>
       )}
     </TouchableOpacity>
   );
@@ -59,14 +77,16 @@ export function Button({ title, variant = 'primary', loading, disabled, style, .
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: UI.radius.control,
+    minHeight: 48,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
   },
   text: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: UI.type.button,
+    textAlign: "center",
+    fontWeight: "700",
   },
 });
-
