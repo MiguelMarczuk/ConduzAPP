@@ -510,7 +510,7 @@ function execute(
         participant();
         check(
           b.paid &&
-            ["confirmado", "concluido"].includes(b.status) &&
+            ["confirmado", "concluido", "falta_aluno", "falta_instrutor"].includes(b.status) &&
             now >= b.start &&
             now <= end(b) + DAY,
           "Contestação permitida durante a aula e até 24h após seu término.",

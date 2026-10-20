@@ -311,3 +311,26 @@ test("avaliações privadas de alunos não vazam pelo endpoint; instrutores cont
     await assertFails(getDoc(doc(env.authenticatedContext(users.outro.uid).firestore(), path)));
   }
 });
+
+test("falta administrativa seguida de contestação válida preserva pagamento e estorno", async () => {
+  for (const who of ["aluno", "instrutor"]) {
+    const s = structuredClone(baseline), id = `${scope}-falta-${who}`;
+    s.bookings[id] = {id, student: users.aluno.uid, instructor: users.instrutor.uid, start: now - 2 * HOUR, duration: 60, price: 8500, commission: 255, paid: true, paymentMode: "simulado", status: "confirmado", ratings: {}, payoutEligible: false};
+    await stateRef.set(s);
+    let r = await call("admin", "absence", {booking: id, who, reason: "Ausência registrada na integração"});
+    assert.equal(r.result.bookings[id].status, `falta_${who}`);
+    const before = r.result.bookings[id];
+    r = await call("aluno", "dispute", {booking: id, reason: "Contesto a falta registrada"});
+    assert.equal(r.result.bookings[id].disputeOpen, true);
+    assert.equal(r.result.bookings[id].payoutEligible, false);
+    for (const field of ["paid", "paymentMode", "price", "commission", "refund", "refundStatus"])
+      assert.equal(r.result.bookings[id][field], before[field], field);
+    assert.ok((await call("instrutor", "eligibility", {booking: id})).error);
+    const ticket = Object.values(r.result.tickets)[0];
+    assert.equal((await db.doc(`bookingAccess/${id}`).get()).data().disputeOpen, true);
+    const adminState = (await call("admin", "state")).result;
+    assert.equal(adminState.tickets[ticket.id].status, "aberto");
+    r = await call("admin", "resolve", {ticket: ticket.id, reason: "Análise da ocorrência concluída", refund: before.refund});
+    assert.equal(r.result.tickets[ticket.id].status, "resolvido");
+  }
+});

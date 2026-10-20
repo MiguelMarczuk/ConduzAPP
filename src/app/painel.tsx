@@ -681,7 +681,7 @@ function BookingCard({ booking: b }: { booking: Booking }) {
           )}
           {(student || teacher) &&
             b.paid &&
-            ["confirmado", "concluido"].includes(b.status) &&
+            ["confirmado", "concluido", "falta_aluno", "falta_instrutor"].includes(b.status) &&
             now >= b.start &&
             now <= end(b) + 86400000 &&
             !b.disputeOpen && (

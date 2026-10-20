@@ -415,3 +415,24 @@ test("estados isolados são selecionados pela claim, nunca por entrada do client
   assert.equal(statePath({ stateScope: "demo-2026-10-30" }), "private/demo-2026-10-30");
   assert.throws(() => statePath({ stateScope: "../state" }), /inválido/);
 });
+
+test("falta registrada mantém contestação até o limite de 24h, sem movimentar valores", () => {
+  for (const who of ["aluno", "instrutor"]) {
+    const absent = act(paid(), admin, "absence", { booking: "b1", who, reason: "Ausência documentada" }, start + HOUR);
+    const before = structuredClone(absent.bookings.b1);
+    for (const participant of [actor, teacher]) {
+      const s = act(absent, participant, "dispute", { booking: "b1", reason: "Discordo da ocorrência" }, start + 25 * HOUR, "contestacao");
+      assert.equal(s.bookings.b1.disputeOpen, true);
+      assert.equal(s.bookings.b1.payoutEligible, false);
+      for (const field of ["paid", "paidAt", "paymentMode", "price", "commission", "refund", "refundStatus", "status"])
+        assert.equal(s.bookings.b1[field], before[field], field);
+      assert.throws(() => act(s, participant, "eligibility", { booking: "b1" }, start + 26 * HOUR), /janela/);
+      assert.throws(() => act(s, {uid: "other"}, "resolve", {ticket: "contestacao", reason: "Análise indevida", refund: 0}), /administração/);
+      const resolved = act(s, admin, "resolve", {ticket: "contestacao", reason: "Análise administrativa registrada", refund: before.refund}, start + 26 * HOUR);
+      assert.equal(resolved.tickets.contestacao.status, "resolvido");
+      assert.equal(resolved.bookings.b1.disputeOpen, false);
+    }
+    assert.throws(() => act(absent, actor, "dispute", {booking: "b1", reason: "Fora do prazo"}, start + 25 * HOUR + 1), /24h/);
+    assert.throws(() => act(absent, {uid: "other"}, "dispute", {booking: "b1", reason: "Sem autorização"}, start + HOUR), /participa/);
+  }
+});
