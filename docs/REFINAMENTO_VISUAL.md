@@ -1,5 +1,7 @@
 # Refinamento visual do ConduzAPP
 
+Revisão pontual posterior: [revisão final de UI/UX](REVISAO_UI_UX_FINAL.md), com investigação da tag de conversa, remoção da comissão da apresentação ao aluno, painel do instrutor compacto e novas capturas comparativas. A direção visual deste documento foi preservada.
+
 Data: 19/10/2026. Branch: `recuperacao-tcc`.
 
 Referência: cinco imagens fornecidas em `ConduzAPP_referencias_5_telas.zip` (login, home, perfil, agendamento e avaliações).

@@ -297,7 +297,7 @@ export default function Painel() {
                 style={[
                   s.tabLabel,
                   (tab === t || (tab === "Avaliações" && t === "Perfil")) &&
-                    s.link,
+                    s.tabLabelActive,
                 ]}
               >
                 {t}
@@ -628,7 +628,7 @@ function Search({
           />
           <Text style={s.small}>
             A solicitação depende do aceite do instrutor. O pagamento simulado
-            fica disponível depois do aceite. Comissão da plataforma: 3%.
+            fica disponível depois do aceite.
           </Text>
         </Card>
         <Reviews uid={u.id} />
@@ -771,29 +771,19 @@ function InstructorHome({ goBookings }: { goBookings: () => void }) {
   const { state } = useSession();
   const me = state!.me!;
   const list = Object.values(state!.bookings);
+  const [showCredential, setShowCredential] = useState(false);
+  const [showAvailability, setShowAvailability] = useState(false);
+  const upcoming = list
+    .filter((b) => b.status === "confirmado" && end(b) > state!.now)
+    .sort((a, b) => a.start - b.start);
   return (
     <View style={s.gap}>
-      <View style={s.hero}>
-        <Text style={s.eyebrow}>PAINEL DO INSTRUTOR</Text>
-        <Text style={s.heroTitle}>Olá, {me.name.split(" ")[0]}.</Text>
-        <Text style={s.white}>
+      <View style={s.welcome}>
+        <Text style={s.title}>Olá, {me.name.split(" ")[0]}.</Text>
+        <Text style={s.muted}>
           Organize sua agenda e acompanhe seus alunos.
         </Text>
       </View>
-      <Card style={s.gap}>
-        <Text style={s.cardTitle}>Credenciamento: {me.approval}</Text>
-        <Text style={s.muted}>
-          {me.suspendedUntil && me.suspendedUntil > state!.now
-            ? `Suspenso até ${dateTime(me.suspendedUntil)}`
-            : me.credentialExpires
-              ? `Validade: ${dateTime(me.credentialExpires)}`
-              : "Envie sua autorização na aba Perfil."}
-        </Text>
-        <Text style={s.small}>
-          Análise manual. O ConduzAPP não consulta automaticamente o Detran.
-        </Text>
-        {me.approvalReason && <Text>{me.approvalReason}</Text>}
-      </Card>
       <View style={s.row}>
         <Card style={s.metric}>
           <Text style={s.number}>
@@ -809,7 +799,69 @@ function InstructorHome({ goBookings }: { goBookings: () => void }) {
         </Card>
       </View>
       <Button title="Ver solicitações e aulas" onPress={goBookings} />
-      <Availability />
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityState={{ expanded: showAvailability }}
+        style={s.disclosure}
+        onPress={() => setShowAvailability(!showAvailability)}
+      >
+        <Icon name="calendar" />
+        <Text style={s.flex}>Sua disponibilidade</Text>
+        <Text style={s.link}>{showAvailability ? "Recolher" : "Abrir"}</Text>
+      </TouchableOpacity>
+      <View style={!showAvailability && { display: "none" }}>
+        <Availability />
+      </View>
+      <Card style={s.gap}>
+        <Text style={s.cardTitle}>Próximas aulas confirmadas</Text>
+        {upcoming.length ? (
+          upcoming.slice(0, 3).map((b) => (
+            <View key={b.id} style={s.gapSmall}>
+              <Text>{state!.users[b.student]?.name || "Aluno"}</Text>
+              <Text style={s.muted}>
+                {dateTime(b.start)} · {b.duration} min
+              </Text>
+            </View>
+          ))
+        ) : (
+          <Text style={s.muted}>Nenhuma próxima aula confirmada.</Text>
+        )}
+      </Card>
+      <Card style={s.gapSmall}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityState={{ expanded: showCredential }}
+          style={s.credentialToggle}
+          onPress={() => setShowCredential(!showCredential)}
+        >
+          <Icon name="shield" size={20} />
+          <Text style={s.flex}>Credenciamento: {me.approval}</Text>
+          <Icon name="chevron" size={16} />
+        </TouchableOpacity>
+        {!!me.suspendedUntil && me.suspendedUntil > state!.now && (
+          <Text style={s.error}>
+            Suspenso até {dateTime(me.suspendedUntil)}
+          </Text>
+        )}
+        {!!me.credentialExpires && me.credentialExpires <= state!.now && (
+          <Text style={s.error}>
+            Autorização vencida. Atualize na aba Perfil.
+          </Text>
+        )}
+        {showCredential && (
+          <>
+            <Text style={s.muted}>
+              {me.credentialExpires
+                ? `Validade: ${dateTime(me.credentialExpires)}`
+                : "Envie sua autorização na aba Perfil."}
+            </Text>
+            <Text style={s.small}>
+              Análise manual. O ConduzAPP não consulta automaticamente o Detran.
+            </Text>
+            {me.approvalReason && <Text>{me.approvalReason}</Text>}
+          </>
+        )}
+      </Card>
       <Reviews uid={me.id} />
     </View>
   );
@@ -936,21 +988,21 @@ function BookingCard({ booking: b }: { booking: Booking }) {
             {dateTime(b.start)} · {b.duration} min
           </Text>
         </View>
-        <Badge
-          title={labels[b.status] || b.status}
-          tone={
-            b.status === "confirmado" || b.status === "concluido"
-              ? "success"
-              : b.status === "cancelado" || b.status.startsWith("falta")
-                ? "danger"
-                : "warning"
-          }
-        />
       </View>
+      <Badge
+        title={labels[b.status] || b.status}
+        tone={
+          b.status === "confirmado" || b.status === "concluido"
+            ? "success"
+            : b.status === "cancelado" || b.status.startsWith("falta")
+              ? "danger"
+              : "warning"
+        }
+      />
       <View style={s.row}>
         <Text style={s.price}>{money(b.price)}</Text>
         <Text style={s.small}>
-          Comissão {money(b.commission)} ·{" "}
+          {me.role !== "aluno" && `Comissão ${money(b.commission)} · `}
           {b.paid ? "Pagamento simulado confirmado" : "Sem pagamento"}
         </Text>
       </View>
