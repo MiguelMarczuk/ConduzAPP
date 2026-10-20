@@ -674,3 +674,44 @@ test("tags refletem reservas pendentes, aceitas ou confirmadas sem exigir pagame
   s.bookings.b2.student = "other";
   assert.equal(tag(s), "SEM AGENDAMENTO");
 });
+
+test("notificações essenciais são geradas na mesma alteração e restritas ao destinatário", () => {
+  let s = booked();
+  const visible = (a) =>
+    Object.values(execute(s, a, "state", {}, now).result.notifications);
+  assert.deepEqual(
+    visible(teacher).map((n) => n.event),
+    ["book"],
+  );
+  assert.deepEqual(visible({ uid: "other" }), []);
+  const notification = visible(teacher)[0].id;
+  assert.throws(
+    () => act(s, actor, "readNotification", { notification }),
+    /autorização/,
+  );
+  assert.throws(
+    () => act(s, admin, "readNotification", { notification }),
+    /autorização/,
+  );
+  s = act(s, teacher, "readNotification", { notification });
+  const readAt = s.notifications[notification].readAt;
+  s = act(s, teacher, "readNotification", { notification }, now + HOUR);
+  assert.equal(s.notifications[notification].readAt, readAt);
+  s = act(s, teacher, "accept", { booking: "b1" });
+  s = act(s, actor, "pay", { booking: "b1" });
+  assert.ok(visible(actor).some((n) => n.event === "accept"));
+  assert.ok(visible(actor).some((n) => n.event === "pay"));
+  assert.ok(visible(teacher).some((n) => n.event === "pay"));
+  s = act(s, actor, "propose", { booking: "b1", start: start + HOUR });
+  assert.ok(visible(teacher).some((n) => n.event === "propose"));
+  s = act(s, teacher, "reschedule", { booking: "b1", accept: true });
+  assert.ok(visible(actor).some((n) => n.event === "reschedule"));
+  s = act(s, actor, "cancel", { booking: "b1" });
+  assert.ok(visible(teacher).some((n) => n.event === "cancel"));
+  const before = Object.keys(s.notifications).length;
+  assert.throws(
+    () => act(s, teacher, "accept", { booking: "b1" }),
+    /processada/,
+  );
+  assert.equal(Object.keys(s.notifications).length, before);
+});

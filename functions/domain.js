@@ -18,6 +18,7 @@ const empty = () => ({
   reviews: {},
   messages: [],
   conversations: {},
+  notifications: {},
   tickets: {},
   audit: [],
 });
@@ -61,6 +62,49 @@ function conversations(state) {
       ? "AGENDADO"
       : "SEM AGENDAMENTO";
   return result;
+}
+function bookingNotifications(state, actor, op, input, id, now) {
+  const events = {
+    book: ["Nova solicitação recebida", "instructor"],
+    accept: ["Solicitação aceita: aguardando pagamento", "student"],
+    pay: ["Aula confirmada — pagamento simulado", "both"],
+    cancel: ["Aula cancelada", "other"],
+    propose: ["Pedido de remarcação recebido", "other"],
+    reschedule: [
+      input.accept ? "Remarcação aceita" : "Remarcação recusada",
+      "other",
+    ],
+    complete: ["Aula concluída: avaliação disponível", "student"],
+    absence: ["Ocorrência de falta registrada pela administração", "both"],
+    dispute: ["Contestação aberta: repasse bloqueado", "other"],
+    resolve: ["Análise administrativa concluída", "both"],
+  };
+  const event = events[op];
+  const booking =
+    state.bookings[
+      op === "book" ? id : input.booking || state.tickets[input.ticket]?.booking
+    ];
+  if (!event || !booking) return;
+  const recipients =
+    event[1] === "both"
+      ? [booking.student, booking.instructor]
+      : event[1] === "other"
+        ? [booking.student, booking.instructor].filter(
+            (uid) => uid !== actor.uid,
+          )
+        : [booking[event[1]]];
+  for (const recipient of recipients) {
+    const notificationId = `${id}_${op}_${recipient}`;
+    state.notifications[notificationId] = {
+      id: notificationId,
+      recipient,
+      booking: booking.id,
+      event: op,
+      title: event[0],
+      at: now,
+      readAt: null,
+    };
+  }
 }
 function validateAvailability(periods, blocks) {
   check(
@@ -155,11 +199,17 @@ function view(state, actor, now) {
       reviews: {},
       messages: [],
       conversations: {},
+      notifications: {},
       tickets: {},
       audit: [],
       now,
     };
-  if (actor.admin) return { ...state, me, now };
+  const notifications = Object.fromEntries(
+    Object.entries(state.notifications || {}).filter(
+      ([, n]) => n.recipient === actor.uid,
+    ),
+  );
+  if (actor.admin) return { ...state, notifications, me, now };
   const bookings = Object.fromEntries(
     Object.entries(state.bookings).filter(([, b]) =>
       [b.student, b.instructor].includes(actor.uid),
@@ -212,6 +262,7 @@ function view(state, actor, now) {
     users,
     bookings,
     conversations: myConversations,
+    notifications,
     reviews: Object.fromEntries(
       Object.values(state.reviews).flatMap((r) => {
         if ([r.from, r.to].includes(actor.uid)) return [[r.id, r]];
@@ -245,6 +296,7 @@ function execute(
   check(actor?.uid, "Autenticação obrigatória.");
   const s = structuredClone(original || empty());
   s.conversations = conversations(s);
+  s.notifications ||= {};
   const me = s.users[actor.uid];
   const admin = () =>
     check(actor.admin === true, "Acesso exclusivo da administração.");
@@ -669,6 +721,15 @@ function execute(
         s.conversations[c.id] ||= { ...c, createdAt: now };
         break;
       }
+      case "readNotification": {
+        const n = s.notifications[input.notification];
+        check(
+          n && n.recipient === actor.uid,
+          "Notificação não encontrada ou sem autorização.",
+        );
+        n.readAt ||= now;
+        break;
+      }
       case "message": {
         check(
           s.users[input.to] &&
@@ -718,7 +779,9 @@ function execute(
         fail("Operação desconhecida.");
     }
   }
-  if (op !== "message") s.audit.push({ id, by: actor.uid, op, at: now });
+  bookingNotifications(s, actor, op, input, id, now);
+  if (!["message", "readNotification"].includes(op))
+    s.audit.push({ id, by: actor.uid, op, at: now });
   check(
     Buffer.byteLength(JSON.stringify(s), "utf8") < 850000,
     "Limite de armazenamento da demonstração atingido.",

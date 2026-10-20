@@ -72,6 +72,18 @@ export type State = {
   users: Record<string, Profile>;
   bookings: Record<string, Booking>;
   reviews: Record<string, Review>;
+  notifications: Record<
+    string,
+    {
+      id: string;
+      recipient: string;
+      booking: string;
+      event: string;
+      title: string;
+      at: number;
+      readAt: number | null;
+    }
+  >;
   conversations: Record<
     string,
     {

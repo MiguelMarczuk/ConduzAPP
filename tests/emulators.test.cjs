@@ -500,3 +500,53 @@ test("tags acompanham reserva, aceite, pagamento, cancelamento e conclusão no s
   r = await call("instrutor", "complete", { booking: b.id });
   assert.equal(tag(r.result), "SEM AGENDAMENTO");
 });
+
+test("notificações internas persistem por destinatário e acompanham os eventos essenciais", async () => {
+  let r = await call("aluno", "book", {
+    instructor: users.instrutor.uid,
+    start,
+  });
+  const b = Object.values(r.result.bookings)[0];
+  r = await call("instrutor", "state");
+  const received = Object.values(r.result.notifications)[0];
+  assert.equal(received.event, "book");
+  assert.deepEqual((await call("outro", "state")).result.notifications, {});
+  assert.ok(
+    (await call("outro", "readNotification", { notification: received.id }))
+      .error,
+  );
+  await call("instrutor", "readNotification", { notification: received.id });
+  assert.ok(
+    (await call("instrutor", "state")).result.notifications[received.id].readAt,
+  );
+  await call("instrutor", "accept", { booking: b.id });
+  r = await call("aluno", "state");
+  assert.ok(
+    Object.values(r.result.notifications).some((n) => n.event === "accept"),
+  );
+  await call("aluno", "pay", { booking: b.id });
+  await call("aluno", "propose", { booking: b.id, start: start + HOUR });
+  r = await call("instrutor", "state");
+  assert.ok(
+    Object.values(r.result.notifications).some((n) => n.event === "pay"),
+  );
+  assert.ok(
+    Object.values(r.result.notifications).some((n) => n.event === "propose"),
+  );
+  await call("instrutor", "reschedule", { booking: b.id, accept: true });
+  r = await call("aluno", "state");
+  assert.ok(
+    Object.values(r.result.notifications).some((n) => n.event === "reschedule"),
+  );
+  await call("aluno", "cancel", { booking: b.id });
+  r = await call("instrutor", "state");
+  assert.ok(
+    Object.values(r.result.notifications).some((n) => n.event === "cancel"),
+  );
+  const count = Object.keys(r.result.notifications).length;
+  assert.ok((await call("aluno", "pay", { booking: b.id })).error);
+  assert.equal(
+    Object.keys((await call("instrutor", "state")).result.notifications).length,
+    count,
+  );
+});

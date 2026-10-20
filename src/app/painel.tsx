@@ -97,6 +97,7 @@ export default function Painel() {
   }>();
   const [tab, setTab] = useState(params.tab || "Início");
   const [messageTo, setMessageTo] = useState(params.to);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [selected, setSelected] = useState<string | null>(
     params.instructor || null,
   );
@@ -142,9 +143,24 @@ export default function Painel() {
           </Text>
           <Text style={s.small}>AMBIENTE LOCAL · PAGAMENTOS SIMULADOS</Text>
         </View>
-        <TouchableOpacity onPress={api.refresh}>
-          <Text style={s.link}>Atualizar</Text>
-        </TouchableOpacity>
+        <View>
+          <TouchableOpacity onPress={api.refresh}>
+            <Text style={s.link}>Atualizar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setShowNotifications(!showNotifications)}
+          >
+            <Text style={s.link}>
+              Notificações (
+              {
+                Object.values(api.state!.notifications || {}).filter(
+                  (n) => !n.readAt,
+                ).length
+              }
+              )
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
       {!!api.error && (
         <View style={s.errorBox}>
@@ -160,6 +176,14 @@ export default function Painel() {
         contentContainerStyle={s.content}
         keyboardShouldPersistTaps="handled"
       >
+        {showNotifications && (
+          <Notifications
+            goBookings={() => {
+              setTab("Agendamentos");
+              setShowNotifications(false);
+            }}
+          />
+        )}
         {me.role === "admin" ? (
           <Admin tab={tab} />
         ) : (
@@ -206,6 +230,35 @@ export default function Painel() {
         ))}
       </View>
     </SafeAreaView>
+  );
+}
+function Notifications({ goBookings }: { goBookings: () => void }) {
+  const { state, run } = useSession();
+  const list = Object.values(state!.notifications || {}).sort(
+    (a, b) => b.at - a.at,
+  );
+  return (
+    <View style={s.gap}>
+      <Heading title="Notificações" sub="Avisos internos sobre suas aulas." />
+      {!list.length && (
+        <Text style={s.muted}>Nenhuma notificação por enquanto.</Text>
+      )}
+      {list.map((n) => (
+        <Card key={n.id} style={s.gap}>
+          <Text style={s.cardTitle}>{n.title}</Text>
+          <Text style={s.small}>
+            {dateTime(n.at)} · {n.readAt ? "Lida" : "Não lida"}
+          </Text>
+          <Action title="Ver agendamentos" onPress={goBookings} />
+          {!n.readAt && (
+            <Action
+              title="Marcar como lida"
+              onPress={() => run("readNotification", { notification: n.id })}
+            />
+          )}
+        </Card>
+      ))}
+    </View>
   );
 }
 function CompleteProfile() {
