@@ -715,3 +715,36 @@ test("notificações essenciais são geradas na mesma alteração e restritas ao
   );
   assert.equal(Object.keys(s.notifications).length, before);
 });
+
+test("disputa em aula concluída bloqueia elegibilidade após a janela; controle sem disputa permite", () => {
+  const completed = act(
+    paid(),
+    teacher,
+    "complete",
+    { booking: "b1" },
+    start + HOUR,
+  );
+  const disputed = act(
+    completed,
+    actor,
+    "dispute",
+    { booking: "b1", reason: "Solicito análise administrativa" },
+    start + 2 * HOUR,
+  );
+  assert.throws(
+    () =>
+      act(
+        disputed,
+        teacher,
+        "eligibility",
+        { booking: "b1" },
+        start + 26 * HOUR,
+      ),
+    /janela/,
+  );
+  assert.equal(
+    act(completed, teacher, "eligibility", { booking: "b1" }, start + 26 * HOUR)
+      .bookings.b1.payoutEligible,
+    true,
+  );
+});

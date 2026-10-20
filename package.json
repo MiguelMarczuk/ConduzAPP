@@ -41,12 +41,13 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "node --test tests/domain.test.cjs",
+    "test": "node --test tests/domain.test.cjs tests/demo.test.cjs",
     "typecheck": "tsc --noEmit",
     "test:emulators": "node --test tests/emulators.test.cjs",
     "build:web": "expo export --platform web",
     "emulators": "firebase emulators:start --project demo-conduzapp",
-    "seed:demo": "node scripts/seed-demo.cjs"
+    "seed:demo": "node scripts/seed-demo.cjs",
+    "prepare:demo": "node scripts/prepare-demo.cjs"
   },
   "private": true
 }

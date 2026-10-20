@@ -23,6 +23,8 @@ const db = require("../functions/emulator-db").configureEmulatorFirestore(
 );
 const scope = `test-${require("node:crypto").randomUUID()}`;
 const stateRef = db.doc(`private/${scope}`);
+const generatedBookings = new Set();
+let preservedState;
 let env,
   users = {},
   baseline,
@@ -71,10 +73,13 @@ async function call(role, op, input = {}) {
     },
   );
   const body = await r.json();
+  for (const b of Object.values(body.result?.bookings || {}))
+    generatedBookings.add(b.id);
   return { status: r.status, ...body };
 }
 before(async () => {
   console.log("Preparando contas e estado temporário nos emuladores.");
+  preservedState = (await db.doc("private/state").get()).data();
   for (const role of ["aluno", "outro", "instrutor", "admin"])
     users[role] = await account(role);
   now = Date.now();
@@ -114,8 +119,15 @@ beforeEach(async () => {
 });
 after(async () => {
   await stateRef.delete();
+  for (const id of generatedBookings)
+    await db.doc(`bookingAccess/${id}`).delete();
   for (const u of Object.values(users)) await getAuth().deleteUser(u.uid);
   if (env) await env.cleanup();
+  assert.deepEqual(
+    (await db.doc("private/state").get()).data(),
+    preservedState,
+    "A suíte não pode modificar a base anterior da demonstração.",
+  );
 });
 test("Function recusa acesso anônimo e elevação de privilégio", async () => {
   assert.equal((await call(null, "state")).status, 401);
@@ -549,4 +561,113 @@ test("notificações internas persistem por destinatário e acompanham os evento
     Object.keys((await call("instrutor", "state")).result.notifications).length,
     count,
   );
+});
+
+test("ensaio completo com a mesma fábrica de dados da apresentação e relógio do servidor", async () => {
+  const { demoFixture } = require("../scripts/demo-fixture.cjs");
+  const fixture = demoFixture(Date.now(), `demo-${scope.slice(5)}`, {
+    aluno: users.aluno.uid,
+    instrutor: users.instrutor.uid,
+    admin: users.admin.uid,
+  });
+  // Acrescenta apenas a conta de terceiro criada por esta suíte.
+  fixture.users[users.outro.uid] = baseline.users[users.outro.uid];
+  await stateRef.set(fixture);
+  const historical = fixture.demo.historicalBooking;
+  let r = await call("instrutor", "complete", { booking: historical });
+  assert.equal(r.result.bookings[historical].status, "concluido");
+  r = await call("aluno", "state");
+  const start = r.result.users[users.instrutor.uid].slots[0];
+  assert.ok(start > Date.now());
+  r = await call("aluno", "openConversation", { to: users.instrutor.uid });
+  assert.equal(Object.values(r.result.conversations)[0].tag, "SEM AGENDAMENTO");
+  await call("aluno", "message", {
+    to: users.instrutor.uid,
+    text: "Ensaio da apresentação",
+    requestId: "ensaio-mensagem-001",
+  });
+  r = await call("aluno", "book", {
+    instructor: users.instrutor.uid,
+    start,
+    location: "Endereço fictício sem CEP",
+  });
+  const future = Object.values(r.result.bookings).find(
+    (b) => b.id !== historical,
+  );
+  assert.equal(future.status, "solicitado");
+  assert.equal(Object.values(r.result.conversations)[0].tag, "AGENDADO");
+  await call("instrutor", "accept", { booking: future.id });
+  r = await call("aluno", "pay", { booking: future.id });
+  assert.equal(r.result.bookings[future.id].status, "confirmado");
+  assert.ok(!r.result.users[users.instrutor.uid].slots.includes(start));
+  assert.ok(
+    (await call("outro", "book", { instructor: users.instrutor.uid, start }))
+      .error,
+  );
+  assert.ok(
+    (
+      await call("instrutor", "complete", {
+        booking: future.id,
+        demo: true,
+        now: Date.now() + DAY,
+      })
+    ).error,
+  );
+  assert.ok(
+    (
+      await call("aluno", "review", {
+        booking: historical,
+        rating: 5,
+        comment: "Ensaio fictício",
+      })
+    ).result,
+  );
+  assert.ok(
+    (
+      await call("instrutor", "review", {
+        booking: historical,
+        rating: 5,
+        comment: "Avaliação privada fictícia",
+      })
+    ).result,
+  );
+  r = await call("admin", "state");
+  assert.equal(r.result.me.role, "admin");
+  const ticket = Object.values(r.result.tickets).find(
+    (t) => t.kind === "suporte",
+  );
+  assert.ok(
+    (
+      await call("admin", "resolve", {
+        ticket: ticket.id,
+        reason: "Orientação fictícia concluída",
+      })
+    ).result,
+  );
+});
+
+test("payload não troca o ambiente selecionado pela claim autenticada", async () => {
+  const target = `test-${require("node:crypto").randomUUID()}`;
+  const foreignRef = db.doc(`private/${target}`);
+  const foreign = structuredClone(baseline);
+  foreign.tickets.segredo = {
+    id: "segredo",
+    owner: users.aluno.uid,
+    kind: "suporte",
+    reason: "Estado de outro ensaio",
+    status: "aberto",
+  };
+  await foreignRef.create(foreign);
+  try {
+    const r = await call("aluno", "state", {
+      stateScope: target,
+      scope: target,
+      path: `private/${target}`,
+    });
+    assert.ok(r.result);
+    assert.deepEqual(r.result.tickets, {});
+    assert.deepEqual((await foreignRef.get()).data(), foreign);
+  } finally {
+    await foreignRef.delete();
+  }
 });
