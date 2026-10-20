@@ -19,7 +19,9 @@ const { ref, uploadBytes, getBytes, listAll } = require("firebase/storage");
 const { empty, HOUR, DAY } = require("../functions/domain");
 initializeApp({ projectId: "demo-conduzapp" });
 const db = require("../functions/emulator-db").configureEmulatorFirestore(getFirestore());
-let backup,
+const scope = `test-${require("node:crypto").randomUUID()}`;
+const stateRef = db.doc(`private/${scope}`);
+let
   env,
   users = {},
   baseline,
@@ -38,8 +40,8 @@ async function account(role) {
   );
   let data = await r.json();
   assert.ok(data.localId, JSON.stringify(data));
-  if (role === "admin") {
-    await getAuth().setCustomUserClaims(data.localId, { admin: true });
+  {
+    await getAuth().setCustomUserClaims(data.localId, { stateScope: scope, ...(role === "admin" ? { admin: true } : {}) });
     r = await fetch(
       "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo",
       {
@@ -69,7 +71,6 @@ async function call(role, op, input = {}) {
 }
 before(async () => {
   console.log("Preparando contas e estado temporário nos emuladores.");
-  backup = await db.doc("private/state").get();
   for (const role of ["aluno", "outro", "instrutor", "admin"])
     users[role] = await account(role);
   now = Date.now();
@@ -105,11 +106,10 @@ before(async () => {
   });
 });
 beforeEach(async () => {
-  await db.doc("private/state").set(baseline);
+  await stateRef.set(baseline);
 });
 after(async () => {
-  if (backup?.exists) await db.doc("private/state").set(backup.data());
-  else await db.doc("private/state").delete();
+  await stateRef.delete();
   for (const u of Object.values(users)) await getAuth().deleteUser(u.uid);
   if (env) await env.cleanup();
 });
@@ -135,7 +135,7 @@ test("duas reservas concorrentes: exatamente uma é aceita na transação", asyn
     JSON.stringify(results),
   );
   assert.equal(results.filter((r) => r.error).length, 1);
-  const state = (await db.doc("private/state").get()).data();
+  const state = (await stateRef.get()).data();
   assert.equal(Object.keys(state.bookings).length, 1);
   const b = Object.values(state.bookings)[0];
   assert.equal(b.duration, 60);
@@ -175,7 +175,7 @@ test("credenciamento, indisponibilidade e suspensão são impostos no backend re
   ]) {
     const s = structuredClone(baseline);
     Object.assign(s.users[users.instrutor.uid], change);
-    await db.doc("private/state").set(s);
+    await stateRef.set(s);
     assert.ok(
       (await call("aluno", "book", { instructor: users.instrutor.uid, start }))
         .error,
@@ -185,7 +185,7 @@ test("credenciamento, indisponibilidade e suspensão são impostos no backend re
 });
 test("conclusão e avaliações bilaterais pelo endpoint com tempo do servidor", async () => {
   const state = structuredClone(baseline),
-    id = "teste-aula-passada";
+    id = `${scope}-aula-passada`;
   state.bookings[id] = {
     id,
     student: users.aluno.uid,
@@ -200,7 +200,7 @@ test("conclusão e avaliações bilaterais pelo endpoint com tempo do servidor",
     ratings: {},
     payoutEligible: false,
   };
-  await db.doc("private/state").set(state);
+  await stateRef.set(state);
   let r = await call("instrutor", "complete", { booking: id });
   assert.equal(r.result.bookings[id].status, "concluido");
   assert.ok((await call("aluno", "review", { booking: id, rating: 5 })).result);
@@ -230,7 +230,7 @@ test("Firestore nega acesso direto a estado, reservas e escrita de privilégios"
   }
 });
 test("fotos privadas: participante pode anexar, terceiro e anônimo não; admin lê", async () => {
-  const booking = "teste-evidencia";
+  const booking = `${scope}-evidencia`;
   await db
     .doc(`bookingAccess/${booking}`)
     .set({
@@ -284,4 +284,30 @@ test("fotos privadas: participante pode anexar, terceiro e anônimo não; admin 
     ),
   );
   await db.doc(`bookingAccess/${booking}`).delete();
+});
+
+
+test("avaliações privadas de alunos não vazam pelo endpoint; instrutores continuam públicos", async () => {
+  const s = structuredClone(baseline);
+  const privateId = "reserva-privada_instrutor";
+  const publicId = "reserva-privada_aluno";
+  s.reviews[privateId] = {id: privateId, booking: "reserva-privada", from: users.instrutor.uid, to: users.aluno.uid, rating: 4, comment: "Informação privada do aluno"};
+  s.reviews[publicId] = {id: publicId, booking: "reserva-privada", from: users.aluno.uid, to: users.instrutor.uid, rating: 5, comment: "Avaliação pública do instrutor"};
+  await stateRef.set(s);
+  for (const role of ["aluno", "instrutor", "admin"]) {
+    const r = await call(role, "state");
+    assert.equal(r.result.reviews[privateId].comment, s.reviews[privateId].comment);
+  }
+  const outsider = (await call("outro", "state")).result;
+  assert.equal(outsider.reviews[privateId], undefined);
+  const reviews = Object.values(outsider.reviews);
+  assert.equal(reviews.length, 1);
+  assert.equal(reviews[0].to, users.instrutor.uid);
+  assert.equal(reviews[0].rating, 5);
+  assert.equal(reviews[0].from, undefined);
+  assert.equal(reviews[0].booking, undefined);
+  assert.ok(!JSON.stringify(outsider).includes("reserva-privada"));
+  for (const path of ["avaliacoes/" + privateId, "private/state", "private/" + scope]) {
+    await assertFails(getDoc(doc(env.authenticatedContext(users.outro.uid).firestore(), path)));
+  }
 });

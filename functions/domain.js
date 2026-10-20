@@ -1,4 +1,5 @@
 "use strict";
+const { createHash } = require("node:crypto");
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
 const fail = (message) => {
@@ -172,7 +173,15 @@ function view(state, actor, now) {
     me,
     users,
     bookings,
-    reviews: state.reviews,
+    reviews: Object.fromEntries(
+      Object.values(state.reviews).flatMap((r) => {
+        if ([r.from, r.to].includes(actor.uid)) return [[r.id, r]];
+        if (state.users[r.to]?.role !== "instrutor") return [];
+        // Avaliação do instrutor é pública; reserva e identidade do aluno não são.
+        const id = createHash("sha256").update(r.id).digest("hex");
+        return [[id, { id, to: r.to, rating: r.rating, comment: r.comment, at: r.at }]];
+      }),
+    ),
     messages: state.messages.filter((m) => [m.from, m.to].includes(actor.uid)),
     tickets: Object.fromEntries(
       Object.entries(state.tickets).filter(([, t]) => t.owner === actor.uid),

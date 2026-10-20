@@ -393,3 +393,25 @@ test("estorno integral ou pendente impede elegibilidade", () => {
     /Estorno/,
   );
 });
+
+test("avaliações do aluno: apenas autor, destinatário e administração; instrutor público sem vínculo privado", () => {
+  const s = fixture();
+  s.reviews.private = { id: "private", booking: "segredo", from: "teacher", to: "student", rating: 4, comment: "Privado" };
+  s.reviews.public = { id: "public", booking: "segredo", from: "student", to: "teacher", rating: 5, comment: "Público" };
+  for (const a of [actor, teacher, admin])
+    assert.equal(execute(s, a, "state", {}, now).result.reviews.private.comment, "Privado");
+  const outside = execute(s, { uid: "other" }, "state", {}, now).result;
+  assert.equal(outside.reviews.private, undefined);
+  const r = Object.values(outside.reviews);
+  assert.equal(r.length, 1);
+  assert.deepEqual(Object.keys(r[0]).sort(), ["id", "to", "rating", "comment", "at"].sort());
+  assert.equal(r[0].rating, 5);
+  assert.ok(!JSON.stringify(outside).includes("segredo"));
+});
+test("estados isolados são selecionados pela claim, nunca por entrada do cliente", () => {
+  const { statePath } = require("../functions/state-scope");
+  assert.equal(statePath({}), "private/state");
+  assert.equal(statePath({ stateScope: "test-abc" }), "private/test-abc");
+  assert.equal(statePath({ stateScope: "demo-2026-10-30" }), "private/demo-2026-10-30");
+  assert.throws(() => statePath({ stateScope: "../state" }), /inválido/);
+});

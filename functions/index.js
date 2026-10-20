@@ -10,6 +10,7 @@ if (
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { randomUUID } = require("node:crypto");
 const { execute, empty } = require("./domain");
+const { statePath } = require("./state-scope");
 let database;
 function getDatabase() {
   if (!database) {
@@ -32,7 +33,7 @@ exports.conduz = onCall({ cors: true, timeoutSeconds: 60 }, async (request) => {
   const db = getDatabase();
   try {
     return await db.runTransaction(async (tx) => {
-      const ref = db.doc("private/state");
+      const ref = db.doc(statePath(request.auth.token));
       const snap = await tx.get(ref);
       const result = execute(
         snap.data() || empty(),

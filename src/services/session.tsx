@@ -52,8 +52,8 @@ export type Booking = {
 };
 export type Review = {
   id: string;
-  booking: string;
-  from: string;
+  booking?: string;
+  from?: string;
   to: string;
   rating: number;
   comment: string;
