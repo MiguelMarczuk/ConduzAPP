@@ -28,15 +28,23 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Preparar-Ambiente.ps1
 
 O primeiro início prepara a base se ela não existir. Reinícios preservam a base existente. As credenciais acima pertencem exclusivamente aos emuladores.
 
+Para ensaiar e apresentar com datas novas, depois de iniciar os emuladores execute:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Preparar-Demonstracao.ps1
+```
+
+Cada execução cria um cenário isolado, com agenda configurada e aula histórica paga ainda não concluída/avaliada. Não sobrescreve a base anterior. **Saia e entre novamente** nas três contas após preparar. Repita no dia 30/10, sem mudar o relógio do computador. Veja a sequência de conclusão histórica, chat e reserva no roteiro.
+
 ## Verificar
 
-Com os emuladores ativos e sem interagir no app durante os testes:
+Com os emuladores ativos:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Verificar.ps1
 ```
 
-Os testes de integração usam contas temporárias nos emuladores, guardam o estado anterior e o restauram ao terminar.
+Os testes de integração usam contas temporárias e um documento isolado por execução; não substituem a base usada pelo aplicativo. A verificação atual inclui 31 testes unitários, 15 integrações/autorização, TypeScript e build web.
 
 Com Node 22 e npm no PATH também é possível executar `npm test`, `npm run typecheck`, `npm run test:emulators` e `npm run build:web`.
 
@@ -48,6 +56,7 @@ Com Node 22 e npm no PATH também é possível executar `npm test`, `npm run typ
 - `src/services/firebase.ts`: conexões exclusivas aos emuladores.
 - `functions/domain.js`: regras puras de negócio testadas.
 - `functions/index.js`: endpoint autenticado, transação Firestore e autorização.
+- `functions/state-scope.js`: cenários de teste/ensaio selecionados por claim do Admin SDK local.
 - `firestore.rules`: impede leitura e escrita direta pelo cliente.
 - `storage.rules`: fotos de contestação privadas para participantes e administração.
 
@@ -59,6 +68,10 @@ Preço em centavos, comissão arredondada no backend, horário de Brasília (UTC
 
 Nenhum deploy, push, transferência financeira, cobrança real ou integração automática com Detran. Credenciamento manual com validade e suspensão. Aprovação administrativa depende de custom claim provisionada apenas pelo seed local. Functions recusam execução fora dos emuladores. Recuperação exclusiva na branch `recuperacao-tcc`.
 
+Chat antes da reserva, tags calculadas no backend e notificações internas usam o serviço agregado existente. Mensagens têm chave de reenvio para evitar duplicação. Atualizações entre participantes seguem o polling de 10 segundos, com botão Atualizar.
+
 Protótipos visuais originais ainda não foram fornecidos; a identidade azul e branca foi preservada com componentes existentes.
 
 Veja [roteiro da apresentação](docs/DEMONSTRACAO.md) e [registro da recuperação](RECUPERACAO.md).
+
+Resultado das correções e pendências: [auditoria atualizada](docs/AUDITORIA_FINAL_TCC.md).

@@ -32,3 +32,25 @@ Três contas fictícias documentadas no README, instrutor aprovado, disponibilid
 - Pagamentos, estornos e elegibilidade são somente simulações. Nenhuma transferência financeira é realizada. Sem integração automática com Detran.
 
 O código original da branch main permanece no histórico Git. Os commits de recuperação são locais.
+
+## Validação das correções prioritárias — 19/10/2026
+
+Resultados novos, sem somar aprovações históricas:
+
+- 28 testes unitários de domínio + 3 da preparação de demonstração: **31/31 aprovados**.
+- Integração com Auth, callable Functions, transações e regras Firestore/Storage: **15/15 aprovados**.
+- Regressões de privacidade de avaliações, contestação após ambas as faltas, valores financeiros preservados ao abrir disputa, bloqueio de elegibilidade com controle positivo, chat anterior à reserva, duplicação concorrente, ACL de participantes, tags por estado, notificações por destinatário e isolamento de cenário.
+- TypeScript: **sem erros, saída 0**.
+- Build web: **aprovado, saída 0, 23 rotas**.
+- `scripts/Verificar.ps1` passou com 30 unitários/14 integrações. Depois, duas regressões adicionais passaram nas execuções finais: 31 unitários/15 integrações. Nenhum código de aplicação mudou depois do build/TypeScript.
+- Logs locais ignorados pelo Git: `.tools/validacao-final.log` e `.tools/integracao-final.log`.
+
+A suíte integrada agora usa claim `test-<UUID>` e documento próprio. Não substitui/restaura a base da demonstração. O hook final confere que `private/state` permanece idêntico e remove os registros temporários conhecidos. Recusas PERMISSION_DENIED nos `assertFails` são esperadas.
+
+Ensaio manual novo no navegador: login dos três perfis; agenda preparada; conclusão normal da histórica; avaliações bilaterais; mensagem antes da reserva futura; SEM AGENDAMENTO → AGENDADO ainda sem pagamento; solicitação, aceite e pagamento simulado; ausência do horário ocupado; notificação de conclusão/aceite/confirmação, marcação de leitura e painel administrativo com pendência/suporte fictícios. As validações negativas de autorização e o fluxo pós-falta foram executados nos testes de backend, não simulados como testes visuais.
+
+Evidências: [chat sem agendamento](chat-sem-agendamento.png), [chat agendado](chat-agendado.png), [notificações](notificacoes-internas.png).
+
+`Preparar-Demonstracao.ps1` foi executado para criar um cenário próprio de ensaio e pode ser repetido perto da banca. O cenário anterior fica preservado. Saia e entre de novo após executar; não altere o relógio. O histórico pago é criado recente, sem avaliações, para permitir conclusão normal.
+
+As seções anteriores deste arquivo descrevem a recuperação original; suas quantidades e estado da base são históricos. O relatório atual e as pendências estão em [AUDITORIA_FINAL_TCC.md](AUDITORIA_FINAL_TCC.md). Permanecem fora da validação nova: aparelhos Android/iOS, teste E2E automatizado e conferência visual de upload/renderização de fotos.
