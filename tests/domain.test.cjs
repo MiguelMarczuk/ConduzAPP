@@ -641,3 +641,36 @@ test("conversas antigas são recuperadas a partir de reservas e mensagens existe
   assert.equal(Object.keys(v.conversations).length, 1);
   assert.equal(v.messages[0].id, "legada");
 });
+
+test("tags refletem reservas pendentes, aceitas ou confirmadas sem exigir pagamento", () => {
+  const initial = act(fixture(), actor, "openConversation", { to: "teacher" });
+  const tag = (s) =>
+    Object.values(execute(s, actor, "state", {}, now).result.conversations)[0]
+      .tag;
+  assert.equal(tag(initial), "SEM AGENDAMENTO");
+  for (const status of [
+    "solicitado",
+    "aguardando_pagamento",
+    "confirmado",
+    "cancelado",
+    "concluido",
+    "falta_aluno",
+    "falta_instrutor",
+  ]) {
+    const s = booked();
+    s.bookings.b1.status = status;
+    assert.equal(
+      tag(s),
+      ["solicitado", "aguardando_pagamento", "confirmado"].includes(status)
+        ? "AGENDADO"
+        : "SEM AGENDAMENTO",
+      status,
+    );
+  }
+  const s = booked();
+  s.bookings.b1.status = "cancelado";
+  s.bookings.b2 = { ...s.bookings.b1, id: "b2", status: "solicitado" };
+  assert.equal(tag(s), "AGENDADO");
+  s.bookings.b2.student = "other";
+  assert.equal(tag(s), "SEM AGENDAMENTO");
+});

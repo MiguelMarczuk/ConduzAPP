@@ -51,6 +51,15 @@ function conversations(state) {
     const c = pair(state, m.from, m.to);
     result[c.id] ||= c;
   }
+  for (const c of Object.values(result))
+    c.tag = Object.values(state.bookings).some(
+      (b) =>
+        b.student === c.student &&
+        b.instructor === c.instructor &&
+        ["solicitado", "aguardando_pagamento", "confirmado"].includes(b.status),
+    )
+      ? "AGENDADO"
+      : "SEM AGENDAMENTO";
   return result;
 }
 function validateAvailability(periods, blocks) {

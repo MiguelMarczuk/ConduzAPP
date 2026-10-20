@@ -74,7 +74,12 @@ export type State = {
   reviews: Record<string, Review>;
   conversations: Record<
     string,
-    { id: string; student: string; instructor: string }
+    {
+      id: string;
+      student: string;
+      instructor: string;
+      tag: "AGENDADO" | "SEM AGENDAMENTO";
+    }
   >;
   messages: {
     id: string;

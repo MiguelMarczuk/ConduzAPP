@@ -464,3 +464,39 @@ test("chat não inicia com instrutor pendente e instrutor não inicia conversa n
     ).error,
   );
 });
+
+test("tags acompanham reserva, aceite, pagamento, cancelamento e conclusão no servidor", async () => {
+  const tag = (result) => Object.values(result.conversations)[0].tag;
+  assert.equal(
+    tag(
+      (await call("aluno", "openConversation", { to: users.instrutor.uid }))
+        .result,
+    ),
+    "SEM AGENDAMENTO",
+  );
+  let r = await call("aluno", "book", {
+    instructor: users.instrutor.uid,
+    start,
+  });
+  const b = Object.values(r.result.bookings)[0];
+  assert.equal(tag(r.result), "AGENDADO");
+  assert.equal(b.paid, false);
+  r = await call("instrutor", "accept", { booking: b.id });
+  assert.equal(tag(r.result), "AGENDADO");
+  r = await call("aluno", "pay", { booking: b.id });
+  assert.equal(tag(r.result), "AGENDADO");
+  r = await call("aluno", "cancel", { booking: b.id });
+  assert.equal(tag(r.result), "SEM AGENDAMENTO");
+  assert.equal(
+    tag((await call("instrutor", "state")).result),
+    "SEM AGENDAMENTO",
+  );
+  const s = (await stateRef.get()).data();
+  Object.assign(s.bookings[b.id], {
+    status: "confirmado",
+    start: now - 2 * HOUR,
+  });
+  await stateRef.set(s);
+  r = await call("instrutor", "complete", { booking: b.id });
+  assert.equal(tag(r.result), "SEM AGENDAMENTO");
+});

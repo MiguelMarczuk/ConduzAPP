@@ -868,7 +868,7 @@ function Messages({ initialTo }: { initialTo?: string }) {
         {participants.map((id) => (
           <Action
             key={id}
-            title={state!.users[id]?.name || "Participante"}
+            title={`${state!.users[id]?.name || "Participante"} · ${Object.values(state!.conversations).find((c) => [c.student, c.instructor].includes(id))?.tag || "SEM AGENDAMENTO"}`}
             onPress={() => setTo(id)}
           />
         ))}
