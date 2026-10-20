@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -96,6 +96,7 @@ export default function Painel() {
     to?: string;
   }>();
   const [tab, setTab] = useState(params.tab || "Início");
+  const [messageTo, setMessageTo] = useState(params.to);
   const [selected, setSelected] = useState<string | null>(
     params.instructor || null,
   );
@@ -165,12 +166,21 @@ export default function Painel() {
           <>
             {tab === "Início" &&
               (me.role === "aluno" ? (
-                <Search selected={selected} select={setSelected} />
+                <Search
+                  selected={selected}
+                  select={setSelected}
+                  onChat={(to) => {
+                    setMessageTo(to);
+                    setTab("Mensagens");
+                  }}
+                />
               ) : (
                 <InstructorHome goBookings={() => setTab("Agendamentos")} />
               ))}
             {tab === "Agendamentos" && <Bookings />}
-            {tab === "Mensagens" && <Messages initialTo={params.to} />}
+            {tab === "Mensagens" && (
+              <Messages key={me.id} initialTo={messageTo} />
+            )}
             {tab === "Perfil" && <Profile />}
           </>
         )}
@@ -219,9 +229,11 @@ function CompleteProfile() {
 function Search({
   selected,
   select,
+  onChat,
 }: {
   selected: string | null;
   select: (id: string | null) => void;
+  onChat: (id: string) => void;
 }) {
   const { state, run } = useSession();
   const [search, setSearch] = useState(""),
@@ -255,6 +267,12 @@ function Search({
             Autorização profissional analisada manualmente
           </Text>
           <Text style={s.price}>{money(u.price)} / aula de 60 min</Text>
+          <Action
+            title="Conversar com o instrutor"
+            onPress={async () => {
+              if (await run("openConversation", { to: u.id })) onChat(u.id);
+            }}
+          />
           <Action
             title={
               (me.favorites || []).includes(u.id)
@@ -681,7 +699,12 @@ function BookingCard({ booking: b }: { booking: Booking }) {
           )}
           {(student || teacher) &&
             b.paid &&
-            ["confirmado", "concluido", "falta_aluno", "falta_instrutor"].includes(b.status) &&
+            [
+              "confirmado",
+              "concluido",
+              "falta_aluno",
+              "falta_instrutor",
+            ].includes(b.status) &&
             now >= b.start &&
             now <= end(b) + 86400000 &&
             !b.disputeOpen && (
@@ -823,9 +846,14 @@ function Messages({ initialTo }: { initialTo?: string }) {
   const me = state!.me!;
   const [to, setTo] = useState(initialTo || ""),
     [text, setText] = useState("");
+  const pending = useRef<{
+    to: string;
+    text: string;
+    requestId: string;
+  } | null>(null);
   const participants = [
     ...new Set(
-      Object.values(state!.bookings).map((b) =>
+      Object.values(state!.conversations || {}).map((b) =>
         b.student === me.id ? b.instructor : b.student,
       ),
     ),
@@ -847,7 +875,10 @@ function Messages({ initialTo }: { initialTo?: string }) {
       </View>
       {!participants.length && (
         <Card>
-          <Text>Solicite uma aula para iniciar sua primeira conversa.</Text>
+          <Text>
+            Abra o perfil de um instrutor aprovado e toque em Conversar com o
+            instrutor.
+          </Text>
         </Card>
       )}
       {!!to && (
@@ -878,7 +909,16 @@ function Messages({ initialTo }: { initialTo?: string }) {
             title="Enviar mensagem"
             disabled={!text.trim()}
             onPress={async () => {
-              if (await run("message", { to, text })) setText("");
+              if (pending.current?.to !== to || pending.current.text !== text)
+                pending.current = {
+                  to,
+                  text,
+                  requestId: `${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`,
+                };
+              if (await run("message", pending.current)) {
+                setText("");
+                pending.current = null;
+              }
             }}
           />
         </>

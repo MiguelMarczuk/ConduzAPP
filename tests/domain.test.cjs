@@ -354,11 +354,23 @@ test("no-show aluno respeita 20min; terceira falta confirmada do instrutor suspe
 });
 test("mensagens e reservas são privadas para terceiros", () => {
   let s = paid();
-  s = act(s, actor, "message", { to: "teacher", text: "Olá" }, now, "msg");
+  s = act(
+    s,
+    actor,
+    "message",
+    { to: "teacher", text: "Olá", requestId: "mensagem-001" },
+    now,
+    "msg",
+  );
   assert.throws(
     () =>
-      act(s, { uid: "other" }, "message", { to: "teacher", text: "Intruso" }),
-    /Solicite/,
+      act(s, { uid: "other" }, "message", {
+        to: "teacher",
+        text: "Intruso",
+        requestId: "intruso-001",
+        conversation: s.messages[0].conversation,
+      }),
+    /participa/,
   );
   const v = execute(s, { uid: "other" }, "state", {}, now).result;
   assert.deepEqual(v.bookings, {});
@@ -396,15 +408,35 @@ test("estorno integral ou pendente impede elegibilidade", () => {
 
 test("avaliações do aluno: apenas autor, destinatário e administração; instrutor público sem vínculo privado", () => {
   const s = fixture();
-  s.reviews.private = { id: "private", booking: "segredo", from: "teacher", to: "student", rating: 4, comment: "Privado" };
-  s.reviews.public = { id: "public", booking: "segredo", from: "student", to: "teacher", rating: 5, comment: "Público" };
+  s.reviews.private = {
+    id: "private",
+    booking: "segredo",
+    from: "teacher",
+    to: "student",
+    rating: 4,
+    comment: "Privado",
+  };
+  s.reviews.public = {
+    id: "public",
+    booking: "segredo",
+    from: "student",
+    to: "teacher",
+    rating: 5,
+    comment: "Público",
+  };
   for (const a of [actor, teacher, admin])
-    assert.equal(execute(s, a, "state", {}, now).result.reviews.private.comment, "Privado");
+    assert.equal(
+      execute(s, a, "state", {}, now).result.reviews.private.comment,
+      "Privado",
+    );
   const outside = execute(s, { uid: "other" }, "state", {}, now).result;
   assert.equal(outside.reviews.private, undefined);
   const r = Object.values(outside.reviews);
   assert.equal(r.length, 1);
-  assert.deepEqual(Object.keys(r[0]).sort(), ["id", "to", "rating", "comment", "at"].sort());
+  assert.deepEqual(
+    Object.keys(r[0]).sort(),
+    ["id", "to", "rating", "comment", "at"].sort(),
+  );
   assert.equal(r[0].rating, 5);
   assert.ok(!JSON.stringify(outside).includes("segredo"));
 });
@@ -412,27 +444,200 @@ test("estados isolados são selecionados pela claim, nunca por entrada do client
   const { statePath } = require("../functions/state-scope");
   assert.equal(statePath({}), "private/state");
   assert.equal(statePath({ stateScope: "test-abc" }), "private/test-abc");
-  assert.equal(statePath({ stateScope: "demo-2026-10-30" }), "private/demo-2026-10-30");
+  assert.equal(
+    statePath({ stateScope: "demo-2026-10-30" }),
+    "private/demo-2026-10-30",
+  );
   assert.throws(() => statePath({ stateScope: "../state" }), /inválido/);
 });
 
 test("falta registrada mantém contestação até o limite de 24h, sem movimentar valores", () => {
   for (const who of ["aluno", "instrutor"]) {
-    const absent = act(paid(), admin, "absence", { booking: "b1", who, reason: "Ausência documentada" }, start + HOUR);
+    const absent = act(
+      paid(),
+      admin,
+      "absence",
+      { booking: "b1", who, reason: "Ausência documentada" },
+      start + HOUR,
+    );
     const before = structuredClone(absent.bookings.b1);
     for (const participant of [actor, teacher]) {
-      const s = act(absent, participant, "dispute", { booking: "b1", reason: "Discordo da ocorrência" }, start + 25 * HOUR, "contestacao");
+      const s = act(
+        absent,
+        participant,
+        "dispute",
+        { booking: "b1", reason: "Discordo da ocorrência" },
+        start + 25 * HOUR,
+        "contestacao",
+      );
       assert.equal(s.bookings.b1.disputeOpen, true);
       assert.equal(s.bookings.b1.payoutEligible, false);
-      for (const field of ["paid", "paidAt", "paymentMode", "price", "commission", "refund", "refundStatus", "status"])
+      for (const field of [
+        "paid",
+        "paidAt",
+        "paymentMode",
+        "price",
+        "commission",
+        "refund",
+        "refundStatus",
+        "status",
+      ])
         assert.equal(s.bookings.b1[field], before[field], field);
-      assert.throws(() => act(s, participant, "eligibility", { booking: "b1" }, start + 26 * HOUR), /janela/);
-      assert.throws(() => act(s, {uid: "other"}, "resolve", {ticket: "contestacao", reason: "Análise indevida", refund: 0}), /administração/);
-      const resolved = act(s, admin, "resolve", {ticket: "contestacao", reason: "Análise administrativa registrada", refund: before.refund}, start + 26 * HOUR);
+      assert.throws(
+        () =>
+          act(
+            s,
+            participant,
+            "eligibility",
+            { booking: "b1" },
+            start + 26 * HOUR,
+          ),
+        /janela/,
+      );
+      assert.throws(
+        () =>
+          act(s, { uid: "other" }, "resolve", {
+            ticket: "contestacao",
+            reason: "Análise indevida",
+            refund: 0,
+          }),
+        /administração/,
+      );
+      const resolved = act(
+        s,
+        admin,
+        "resolve",
+        {
+          ticket: "contestacao",
+          reason: "Análise administrativa registrada",
+          refund: before.refund,
+        },
+        start + 26 * HOUR,
+      );
       assert.equal(resolved.tickets.contestacao.status, "resolvido");
       assert.equal(resolved.bookings.b1.disputeOpen, false);
     }
-    assert.throws(() => act(absent, actor, "dispute", {booking: "b1", reason: "Fora do prazo"}, start + 25 * HOUR + 1), /24h/);
-    assert.throws(() => act(absent, {uid: "other"}, "dispute", {booking: "b1", reason: "Sem autorização"}, start + HOUR), /participa/);
+    assert.throws(
+      () =>
+        act(
+          absent,
+          actor,
+          "dispute",
+          { booking: "b1", reason: "Fora do prazo" },
+          start + 25 * HOUR + 1,
+        ),
+      /24h/,
+    );
+    assert.throws(
+      () =>
+        act(
+          absent,
+          { uid: "other" },
+          "dispute",
+          { booking: "b1", reason: "Sem autorização" },
+          start + HOUR,
+        ),
+      /participa/,
+    );
   }
+});
+
+test("conversa antes da reserva exige aluno e instrutor aprovado; participantes mantêm acesso", () => {
+  let s = act(fixture(), actor, "openConversation", { to: "teacher" });
+  assert.deepEqual(s.bookings, {});
+  assert.equal(Object.keys(s.conversations).length, 1);
+  s = act(s, actor, "openConversation", { to: "teacher" });
+  assert.equal(Object.keys(s.conversations).length, 1);
+  assert.equal(
+    Object.keys(execute(s, teacher, "state", {}, now).result.conversations)
+      .length,
+    1,
+  );
+  assert.equal(
+    Object.keys(
+      execute(s, { uid: "other" }, "state", {}, now).result.conversations,
+    ).length,
+    0,
+  );
+  assert.equal(
+    execute(s, teacher, "state", {}, now).result.users.student.name,
+    "Aluno Teste",
+  );
+  assert.throws(
+    () =>
+      act(fixture(), teacher, "message", {
+        to: "student",
+        text: "Não solicitado",
+        requestId: "novo-envio",
+      }),
+    /Aguarde/,
+  );
+  assert.throws(
+    () => act(fixture(), actor, "openConversation", { to: "other" }),
+    /aprovado/,
+  );
+  for (const change of [
+    { approval: "pendente" },
+    { suspendedUntil: now + DAY },
+    { credentialExpires: now - 1 },
+  ]) {
+    const blocked = fixture();
+    Object.assign(blocked.users.teacher, change);
+    assert.throws(
+      () => act(blocked, actor, "openConversation", { to: "teacher" }),
+      /aprovado/,
+    );
+  }
+});
+test("reenvio de mensagem é idempotente por remetente; conteúdo diferente não reutiliza chave", () => {
+  const input = {
+    to: "teacher",
+    text: "Olá antes da reserva",
+    requestId: "envio-unico-001",
+  };
+  let s = act(fixture(), actor, "message", input, now, "m1");
+  const retry = execute(s, actor, "message", input, now + 1, "m2");
+  assert.equal(retry.write, false);
+  assert.equal(retry.state.messages.length, 1);
+  assert.equal(retry.state.messages[0].id, "m1");
+  assert.throws(
+    () => act(s, actor, "message", { ...input, text: "Alterada" }),
+    /já utilizado/,
+  );
+  assert.throws(
+    () => act(s, actor, "message", { to: "teacher", text: "Sem chave" }),
+    /Identificador/,
+  );
+  s.users.teacher.suspendedUntil = now + DAY;
+  s = act(
+    s,
+    teacher,
+    "message",
+    {
+      to: "student",
+      text: "Histórico preservado",
+      requestId: "envio-unico-001",
+    },
+    now,
+    "m3",
+  );
+  assert.equal(s.messages.length, 2);
+  assert.deepEqual(
+    execute(s, { uid: "other" }, "state", {}, now).result.messages,
+    [],
+  );
+});
+test("conversas antigas são recuperadas a partir de reservas e mensagens existentes", () => {
+  const s = paid();
+  delete s.conversations;
+  s.messages.push({
+    id: "legada",
+    from: "student",
+    to: "teacher",
+    text: "Histórico",
+    at: now,
+  });
+  const v = execute(s, actor, "state", {}, now).result;
+  assert.equal(Object.keys(v.conversations).length, 1);
+  assert.equal(v.messages[0].id, "legada");
 });

@@ -17,6 +17,7 @@ const empty = () => ({
   bookings: {},
   reviews: {},
   messages: [],
+  conversations: {},
   tickets: {},
   audit: [],
 });
@@ -30,6 +31,28 @@ const approved = (u, now) =>
   u.approval === "aprovado" &&
   u.credentialExpires > now &&
   !(u.suspendedUntil > now);
+function pair(state, a, b) {
+  const student = [a, b].find((id) => state.users[id]?.role === "aluno");
+  const instructor = [a, b].find((id) => state.users[id]?.role === "instrutor");
+  check(a !== b && student && instructor, "Conversa exige aluno e instrutor.");
+  const id = createHash("sha256")
+    .update(JSON.stringify([student, instructor]))
+    .digest("hex");
+  return { id, student, instructor };
+}
+function conversations(state) {
+  const result = { ...(state.conversations || {}) };
+  // Recupera os vínculos e o histórico existentes sem migrar ou apagar mensagens.
+  for (const b of Object.values(state.bookings)) {
+    const c = pair(state, b.student, b.instructor);
+    result[c.id] ||= c;
+  }
+  for (const m of state.messages) {
+    const c = pair(state, m.from, m.to);
+    result[c.id] ||= c;
+  }
+  return result;
+}
 function validateAvailability(periods, blocks) {
   check(
     Array.isArray(periods) && periods.length <= 28,
@@ -122,6 +145,7 @@ function view(state, actor, now) {
       bookings: {},
       reviews: {},
       messages: [],
+      conversations: {},
       tickets: {},
       audit: [],
       now,
@@ -132,12 +156,17 @@ function view(state, actor, now) {
       [b.student, b.instructor].includes(actor.uid),
     ),
   );
+  const myConversations = Object.fromEntries(
+    Object.entries(conversations(state)).filter(([, c]) =>
+      [c.student, c.instructor].includes(actor.uid),
+    ),
+  );
   const users = {};
   for (const [id, u] of Object.entries(state.users)) {
     if (id === actor.uid) users[id] = u;
     else if (
       approved(u, now) ||
-      Object.values(bookings).some((b) =>
+      Object.values({ ...bookings, ...myConversations }).some((b) =>
         [b.student, b.instructor].includes(id),
       )
     ) {
@@ -173,13 +202,19 @@ function view(state, actor, now) {
     me,
     users,
     bookings,
+    conversations: myConversations,
     reviews: Object.fromEntries(
       Object.values(state.reviews).flatMap((r) => {
         if ([r.from, r.to].includes(actor.uid)) return [[r.id, r]];
         if (state.users[r.to]?.role !== "instrutor") return [];
         // Avaliação do instrutor é pública; reserva e identidade do aluno não são.
         const id = createHash("sha256").update(r.id).digest("hex");
-        return [[id, { id, to: r.to, rating: r.rating, comment: r.comment, at: r.at }]];
+        return [
+          [
+            id,
+            { id, to: r.to, rating: r.rating, comment: r.comment, at: r.at },
+          ],
+        ];
       }),
     ),
     messages: state.messages.filter((m) => [m.from, m.to].includes(actor.uid)),
@@ -200,6 +235,7 @@ function execute(
 ) {
   check(actor?.uid, "Autenticação obrigatória.");
   const s = structuredClone(original || empty());
+  s.conversations = conversations(s);
   const me = s.users[actor.uid];
   const admin = () =>
     check(actor.admin === true, "Acesso exclusivo da administração.");
@@ -510,7 +546,12 @@ function execute(
         participant();
         check(
           b.paid &&
-            ["confirmado", "concluido", "falta_aluno", "falta_instrutor"].includes(b.status) &&
+            [
+              "confirmado",
+              "concluido",
+              "falta_aluno",
+              "falta_instrutor",
+            ].includes(b.status) &&
             now >= b.start &&
             now <= end(b) + DAY,
           "Contestação permitida durante a aula e até 24h após seu término.",
@@ -610,30 +651,60 @@ function execute(
         }
         break;
       }
-      case "message":
+      case "openConversation": {
+        check(
+          me.role === "aluno" && approved(s.users[input.to], now),
+          "Escolha um instrutor aprovado e disponível para conversar.",
+        );
+        const c = pair(s, actor.uid, input.to);
+        s.conversations[c.id] ||= { ...c, createdAt: now };
+        break;
+      }
+      case "message": {
         check(
           s.users[input.to] &&
             input.to !== actor.uid &&
             text(input.text).length > 0,
           "Destinatário ou mensagem inválidos.",
         );
+        const c = pair(s, actor.uid, input.to);
         check(
-          Object.values(s.bookings).some(
-            (x) =>
-              [x.student, x.instructor].includes(actor.uid) &&
-              [x.student, x.instructor].includes(input.to),
-          ),
-          "Solicite uma aula para iniciar a conversa.",
+          !input.conversation || input.conversation === c.id,
+          "Você não participa desta conversa.",
         );
+        check(
+          s.conversations[c.id] ||
+            (me.role === "aluno" && approved(s.users[input.to], now)),
+          "Aguarde o aluno iniciar a conversa.",
+        );
+        check(
+          typeof input.requestId === "string" &&
+            /^[a-zA-Z0-9_-]{8,100}$/.test(input.requestId),
+          "Identificador de envio inválido.",
+        );
+        const previous = s.messages.find(
+          (m) => m.from === actor.uid && m.requestId === input.requestId,
+        );
+        if (previous) {
+          check(
+            previous.to === input.to && previous.text === text(input.text),
+            "Identificador de envio já utilizado para outra mensagem.",
+          );
+          return { state: s, result: view(s, actor, now), write: false };
+        }
         check(s.messages.length < 1500, "Limite da demonstração atingido.");
+        s.conversations[c.id] ||= { ...c, createdAt: now };
         s.messages.push({
           id,
+          requestId: input.requestId,
+          conversation: c.id,
           from: actor.uid,
           to: input.to,
           text: text(input.text),
           at: now,
         });
         break;
+      }
       default:
         fail("Operação desconhecida.");
     }

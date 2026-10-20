@@ -72,6 +72,10 @@ export type State = {
   users: Record<string, Profile>;
   bookings: Record<string, Booking>;
   reviews: Record<string, Review>;
+  conversations: Record<
+    string,
+    { id: string; student: string; instructor: string }
+  >;
   messages: {
     id: string;
     from: string;

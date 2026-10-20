@@ -18,11 +18,12 @@ const { doc, getDoc, setDoc } = require("firebase/firestore");
 const { ref, uploadBytes, getBytes, listAll } = require("firebase/storage");
 const { empty, HOUR, DAY } = require("../functions/domain");
 initializeApp({ projectId: "demo-conduzapp" });
-const db = require("../functions/emulator-db").configureEmulatorFirestore(getFirestore());
+const db = require("../functions/emulator-db").configureEmulatorFirestore(
+  getFirestore(),
+);
 const scope = `test-${require("node:crypto").randomUUID()}`;
 const stateRef = db.doc(`private/${scope}`);
-let
-  env,
+let env,
   users = {},
   baseline,
   now,
@@ -41,7 +42,10 @@ async function account(role) {
   let data = await r.json();
   assert.ok(data.localId, JSON.stringify(data));
   {
-    await getAuth().setCustomUserClaims(data.localId, { stateScope: scope, ...(role === "admin" ? { admin: true } : {}) });
+    await getAuth().setCustomUserClaims(data.localId, {
+      stateScope: scope,
+      ...(role === "admin" ? { admin: true } : {}),
+    });
     r = await fetch(
       "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo",
       {
@@ -160,6 +164,7 @@ test("fluxo integrado: solicitar → aceitar → simular pagamento, com privacid
   await call("aluno", "message", {
     to: users.instrutor.uid,
     text: "Mensagem privada",
+    requestId: "mensagem-001",
   });
   assert.equal((await call("instrutor", "state")).result.messages.length, 1);
   assert.equal((await call("outro", "state")).result.messages.length, 0);
@@ -231,13 +236,11 @@ test("Firestore nega acesso direto a estado, reservas e escrita de privilégios"
 });
 test("fotos privadas: participante pode anexar, terceiro e anônimo não; admin lê", async () => {
   const booking = `${scope}-evidencia`;
-  await db
-    .doc(`bookingAccess/${booking}`)
-    .set({
-      student: users.aluno.uid,
-      instructor: users.instrutor.uid,
-      disputeOpen: true,
-    });
+  await db.doc(`bookingAccess/${booking}`).set({
+    student: users.aluno.uid,
+    instructor: users.instrutor.uid,
+    disputeOpen: true,
+  });
   const path = `disputes/${booking}/${users.aluno.uid}/foto.png`;
   const bytes = new Uint8Array([137, 80, 78, 71]);
   const mine = env.authenticatedContext(users.aluno.uid).storage();
@@ -286,17 +289,33 @@ test("fotos privadas: participante pode anexar, terceiro e anônimo não; admin 
   await db.doc(`bookingAccess/${booking}`).delete();
 });
 
-
 test("avaliações privadas de alunos não vazam pelo endpoint; instrutores continuam públicos", async () => {
   const s = structuredClone(baseline);
   const privateId = "reserva-privada_instrutor";
   const publicId = "reserva-privada_aluno";
-  s.reviews[privateId] = {id: privateId, booking: "reserva-privada", from: users.instrutor.uid, to: users.aluno.uid, rating: 4, comment: "Informação privada do aluno"};
-  s.reviews[publicId] = {id: publicId, booking: "reserva-privada", from: users.aluno.uid, to: users.instrutor.uid, rating: 5, comment: "Avaliação pública do instrutor"};
+  s.reviews[privateId] = {
+    id: privateId,
+    booking: "reserva-privada",
+    from: users.instrutor.uid,
+    to: users.aluno.uid,
+    rating: 4,
+    comment: "Informação privada do aluno",
+  };
+  s.reviews[publicId] = {
+    id: publicId,
+    booking: "reserva-privada",
+    from: users.aluno.uid,
+    to: users.instrutor.uid,
+    rating: 5,
+    comment: "Avaliação pública do instrutor",
+  };
   await stateRef.set(s);
   for (const role of ["aluno", "instrutor", "admin"]) {
     const r = await call(role, "state");
-    assert.equal(r.result.reviews[privateId].comment, s.reviews[privateId].comment);
+    assert.equal(
+      r.result.reviews[privateId].comment,
+      s.reviews[privateId].comment,
+    );
   }
   const outsider = (await call("outro", "state")).result;
   assert.equal(outsider.reviews[privateId], undefined);
@@ -307,30 +326,141 @@ test("avaliações privadas de alunos não vazam pelo endpoint; instrutores cont
   assert.equal(reviews[0].from, undefined);
   assert.equal(reviews[0].booking, undefined);
   assert.ok(!JSON.stringify(outsider).includes("reserva-privada"));
-  for (const path of ["avaliacoes/" + privateId, "private/state", "private/" + scope]) {
-    await assertFails(getDoc(doc(env.authenticatedContext(users.outro.uid).firestore(), path)));
+  for (const path of [
+    "avaliacoes/" + privateId,
+    "private/state",
+    "private/" + scope,
+  ]) {
+    await assertFails(
+      getDoc(doc(env.authenticatedContext(users.outro.uid).firestore(), path)),
+    );
   }
 });
 
 test("falta administrativa seguida de contestação válida preserva pagamento e estorno", async () => {
   for (const who of ["aluno", "instrutor"]) {
-    const s = structuredClone(baseline), id = `${scope}-falta-${who}`;
-    s.bookings[id] = {id, student: users.aluno.uid, instructor: users.instrutor.uid, start: now - 2 * HOUR, duration: 60, price: 8500, commission: 255, paid: true, paymentMode: "simulado", status: "confirmado", ratings: {}, payoutEligible: false};
+    const s = structuredClone(baseline),
+      id = `${scope}-falta-${who}`;
+    s.bookings[id] = {
+      id,
+      student: users.aluno.uid,
+      instructor: users.instrutor.uid,
+      start: now - 2 * HOUR,
+      duration: 60,
+      price: 8500,
+      commission: 255,
+      paid: true,
+      paymentMode: "simulado",
+      status: "confirmado",
+      ratings: {},
+      payoutEligible: false,
+    };
     await stateRef.set(s);
-    let r = await call("admin", "absence", {booking: id, who, reason: "Ausência registrada na integração"});
+    let r = await call("admin", "absence", {
+      booking: id,
+      who,
+      reason: "Ausência registrada na integração",
+    });
     assert.equal(r.result.bookings[id].status, `falta_${who}`);
     const before = r.result.bookings[id];
-    r = await call("aluno", "dispute", {booking: id, reason: "Contesto a falta registrada"});
+    r = await call("aluno", "dispute", {
+      booking: id,
+      reason: "Contesto a falta registrada",
+    });
     assert.equal(r.result.bookings[id].disputeOpen, true);
     assert.equal(r.result.bookings[id].payoutEligible, false);
-    for (const field of ["paid", "paymentMode", "price", "commission", "refund", "refundStatus"])
+    for (const field of [
+      "paid",
+      "paymentMode",
+      "price",
+      "commission",
+      "refund",
+      "refundStatus",
+    ])
       assert.equal(r.result.bookings[id][field], before[field], field);
-    assert.ok((await call("instrutor", "eligibility", {booking: id})).error);
+    assert.ok((await call("instrutor", "eligibility", { booking: id })).error);
     const ticket = Object.values(r.result.tickets)[0];
-    assert.equal((await db.doc(`bookingAccess/${id}`).get()).data().disputeOpen, true);
+    assert.equal(
+      (await db.doc(`bookingAccess/${id}`).get()).data().disputeOpen,
+      true,
+    );
     const adminState = (await call("admin", "state")).result;
     assert.equal(adminState.tickets[ticket.id].status, "aberto");
-    r = await call("admin", "resolve", {ticket: ticket.id, reason: "Análise da ocorrência concluída", refund: before.refund});
+    r = await call("admin", "resolve", {
+      ticket: ticket.id,
+      reason: "Análise da ocorrência concluída",
+      refund: before.refund,
+    });
     assert.equal(r.result.tickets[ticket.id].status, "resolvido");
   }
+});
+
+test("chat sem reserva preserva participantes e impede duplicação em reenvios concorrentes", async () => {
+  let r = await call("aluno", "openConversation", { to: users.instrutor.uid });
+  assert.deepEqual(r.result.bookings, {});
+  const c = Object.values(r.result.conversations)[0];
+  const input = {
+    to: users.instrutor.uid,
+    text: "Conversa antes da reserva",
+    requestId: "envio-concorrente-001",
+    conversation: c.id,
+  };
+  const responses = await Promise.all([
+    call("aluno", "message", input),
+    call("aluno", "message", input),
+  ]);
+  for (const response of responses)
+    assert.ok(response.result, JSON.stringify(response));
+  r = await call("instrutor", "state");
+  assert.equal(r.result.messages.length, 1);
+  assert.ok(r.result.conversations[c.id]);
+  assert.equal(r.result.users[users.aluno.uid].credential, undefined);
+  assert.ok(
+    (
+      await call("instrutor", "message", {
+        to: users.aluno.uid,
+        text: "Resposta",
+        requestId: "resposta-001",
+      })
+    ).result,
+  );
+  const outsider = (await call("outro", "state", { conversation: c.id }))
+    .result;
+  assert.deepEqual(outsider.messages, []);
+  assert.deepEqual(outsider.conversations, {});
+  assert.ok(
+    (await call("outro", "message", { ...input, requestId: "intrusao-001" }))
+      .error,
+  );
+  assert.ok(
+    (await call("aluno", "message", { ...input, text: "Fraude" })).error,
+  );
+  assert.equal((await call("aluno", "state")).result.messages.length, 2);
+});
+test("chat não inicia com instrutor pendente e instrutor não inicia conversa não solicitada", async () => {
+  assert.ok(
+    (
+      await call("instrutor", "message", {
+        to: users.aluno.uid,
+        text: "Indevida",
+        requestId: "indevida-001",
+      })
+    ).error,
+  );
+  const s = structuredClone(baseline);
+  s.users[users.instrutor.uid].approval = "pendente";
+  await stateRef.set(s);
+  assert.ok(
+    (await call("aluno", "openConversation", { to: users.instrutor.uid }))
+      .error,
+  );
+  assert.ok(
+    (
+      await call("aluno", "message", {
+        to: users.instrutor.uid,
+        text: "Não permitido",
+        requestId: "bloqueada-001",
+      })
+    ).error,
+  );
 });
