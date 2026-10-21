@@ -12,18 +12,19 @@ function fixture() {
     id: "student",
     name: "Aluno Teste",
     role: "aluno",
-    favorites: [],
+    favorites: [], photoPath:"fixture/photo", identity:{status:"aprovado"},
   };
   s.users.other = {
     id: "other",
     name: "Outro Aluno",
     role: "aluno",
-    favorites: [],
+    favorites: [], photoPath:"fixture/photo", identity:{status:"aprovado"},
   };
   s.users.teacher = {
     id: "teacher",
     name: "Instrutor Teste",
     role: "instrutor",
+    photoPath:"fixture/teacher", identity:{status:"aprovado"},
     approval: "aprovado",
     credential: "FICTICIA",
     credentialExpires: now + 30 * DAY,

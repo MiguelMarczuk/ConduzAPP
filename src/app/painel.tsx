@@ -31,6 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { MenuRow } from "@/components/ui/menu-row";
 import { UI } from "@/constants/theme";
 import { panelStyles as s } from "@/constants/panel-styles";
+import {IdentityPanel,IdentityAdmin} from "@/components/identity-panel";
 const labels: Record<string, string> = {
   solicitado: "Solicitação enviada",
   aguardando_pagamento: "Aguardando pagamento",
@@ -146,7 +147,8 @@ export default function Painel() {
         </ScrollView>
       </SafeAreaView>
     );
-  const tabs =
+  const identityPending = me.role !== "admin" && me.identity?.status !== "aprovado";
+  const tabs = identityPending ? ["Perfil"] :
     me.role === "admin"
       ? ["Início", "Ocorrências", "Agendamentos", "Perfil"]
       : ["Início", "Agendamentos", "Mensagens", "Perfil"];
@@ -213,7 +215,7 @@ export default function Painel() {
             }}
           />
         )}
-        {me.role === "admin" ? (
+        {identityPending ? <View style={s.gap}><Heading title="Seu cadastro está aguardando análise." sub="Complete a foto e a verificação de identidade. Reservas anteriores não foram canceladas; use o suporte para acompanhar ocorrências."/><Profile/></View> : me.role === "admin" ? (
           <Admin tab={tab} />
         ) : (
           <>
@@ -432,7 +434,7 @@ function Search({
         </View>
         <Card style={s.gap}>
           <View style={s.instructor}>
-            <Avatar nome={u.name} size={64} />
+            <Avatar foto={u.photoPath} nome={u.name} size={64} />
             <View style={s.flex}>
               <Text style={s.cardTitle}>{u.name}</Text>
               <Text style={s.muted}>
@@ -717,7 +719,7 @@ function Search({
         >
           <Card style={s.gap}>
             <View style={s.instructor}>
-              <Avatar nome={u.name} size={58} />
+              <Avatar foto={u.photoPath} nome={u.name} size={58} />
               <View style={s.flex}>
                 <Text style={s.cardTitle}>{u.name}</Text>
                 <Text style={s.small}>
@@ -981,7 +983,7 @@ function BookingCard({ booking: b }: { booking: Booking }) {
   return (
     <Card style={s.gap}>
       <View style={s.row}>
-        <Avatar nome={other?.name || "Aula"} size={48} />
+        <Avatar foto={other?.photoPath} nome={other?.name || "Aula"} size={48} />
         <View style={s.flex}>
           <Text style={s.cardTitle}>{other?.name || "Aula"}</Text>
           <Text style={s.muted}>
@@ -1030,6 +1032,7 @@ function BookingCard({ booking: b }: { booking: Booking }) {
               onPress={() => run("accept", { booking: b.id })}
             />
           )}
+          {(student || teacher) && (!state!.users[b.student]?.photoPath || !state!.users[b.instructor]?.photoPath) && <Text style={s.error}>Ambos precisam de foto de perfil para confirmar. Acesse Perfil para adicionar ou substituir sua foto. Aulas antigas não foram canceladas.</Text>}
           {student && b.status === "aguardando_pagamento" && (
             <Button
               title="Confirmar pagamento SIMULADO"
@@ -1318,7 +1321,7 @@ function Messages({ initialTo }: { initialTo?: string }) {
                 style={[s.conversation, to === id && s.conversationActive]}
                 onPress={() => setTo(id)}
               >
-                <Avatar nome={name} size={48} />
+                <Avatar foto={state!.users[id]?.photoPath} nome={name} size={48} />
                 <View style={s.conversationInfo}>
                   <Text style={s.conversationName}>{name}</Text>
                   <Text numberOfLines={1} style={s.small}>
@@ -1357,7 +1360,7 @@ function Messages({ initialTo }: { initialTo?: string }) {
       {!!to && (
         <Card style={s.gap}>
           <View style={s.chatHeader}>
-            <Avatar nome={state!.users[to]?.name || "Participante"} size={40} />
+            <Avatar foto={state!.users[to]?.photoPath} nome={state!.users[to]?.name || "Participante"} size={40} />
             <View style={s.flex}>
               <Text style={s.cardTitle}>{state!.users[to]?.name}</Text>
               <Text style={s.small}>Conversa privada entre participantes</Text>
@@ -1497,7 +1500,7 @@ function Reviews({ uid }: { uid: string }) {
         return (
           <Card key={r.id} style={s.gap}>
             <View style={s.reviewHeader}>
-              <Avatar nome={author || "Participante"} size={42} />
+              <Avatar foto={r.from ? state!.users[r.from]?.photoPath : undefined} nome={author || "Participante"} size={42} />
               <View style={s.flex}>
                 <Text style={s.conversationName}>
                   {author || "Participante da aula"}
@@ -1545,7 +1548,7 @@ function Profile({ navigate }: { navigate?: (tab: string) => void }) {
           <Icon name="edit" color="white" size={22} />
         </TouchableOpacity>
         <View style={s.avatarRing}>
-          <Avatar nome={me.name} size={80} />
+          <Avatar foto={me.photoPath} nome={me.name} size={80} />
         </View>
         <Text style={s.profileName}>{me.name}</Text>
         <Text style={s.profileRole}>
@@ -1557,6 +1560,7 @@ function Profile({ navigate }: { navigate?: (tab: string) => void }) {
         </Text>
         {!!me.region && <Text style={s.profileRole}>{me.region}</Text>}
       </View>
+      {me.role !== "admin" && (section === "identity" || me.identity?.status !== "aprovado") && <IdentityPanel/>}
       {!section && (
         <Card style={s.menu}>
           {navigate && (
@@ -1602,6 +1606,7 @@ function Profile({ navigate }: { navigate?: (tab: string) => void }) {
               onPress={() => toggle("credential")}
             />
           )}
+          {me.role !== "admin" && <MenuRow icon="shield" title="Foto e verificação de identidade" expanded={section === "identity"} onPress={()=>toggle("identity")}/>}
           <MenuRow
             icon="help"
             title="Ajuda e suporte"
@@ -1780,6 +1785,8 @@ function Admin({ tab }: { tab: string }) {
           <Text>Ocorrências</Text>
         </Card>
       </View>
+      <Heading title="Verificações de identidade" sub="Comparação visual manual. Somente documentos fictícios; sem biometria ou serviço oficial."/>
+      {Object.values(state!.users).filter(u=>u.identity?.status === "pendente").map(u=><IdentityAdmin key={u.id} profile={u}/>)}
       <Heading
         title="Credenciamento de instrutores"
         sub="Confira autorização e validade. Esta análise não representa uma consulta automática ao Detran."

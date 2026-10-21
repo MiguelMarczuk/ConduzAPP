@@ -41,7 +41,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "node --test tests/domain.test.cjs tests/demo.test.cjs",
+    "test": "node --test tests/domain.test.cjs tests/demo.test.cjs tests/features.test.cjs",
     "typecheck": "tsc --noEmit",
     "test:emulators": "node --test tests/emulators.test.cjs",
     "build:web": "expo export --platform web",

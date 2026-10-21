@@ -18,6 +18,7 @@ import { Card } from "@/components/ui/card";
 import { Image } from "expo-image";
 import { UI } from "@/constants/theme";
 import { Icon } from "@/components/ui/icon";
+import {authFields,authMessage} from "@/lib/presentation";
 export function AuthScreen({
   signup = false,
   role = "aluno",
@@ -35,6 +36,8 @@ export function AuthScreen({
     [busy, setBusy] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
   async function submit() {
+    const invalid=authFields(email,password,signup,name);
+    if(invalid){setError(invalid);return;}
     setBusy(true);
     setError("");
     try {
@@ -54,7 +57,7 @@ export function AuthScreen({
       await api.refresh();
       router.replace("/painel");
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Não foi possível entrar.");
+      setError(authMessage(e,signup));
     } finally {
       setBusy(false);
     }

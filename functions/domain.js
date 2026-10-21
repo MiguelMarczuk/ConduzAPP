@@ -1,5 +1,6 @@
 "use strict";
 const { createHash } = require("node:crypto");
+const {verified, identityOperation, assertOperational} = require("./identity");
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
 const fail = (message) => {
@@ -29,6 +30,7 @@ const active = (b) =>
   !["cancelado", "falta_aluno", "falta_instrutor"].includes(b.status);
 const approved = (u, now) =>
   u?.role === "instrutor" &&
+  verified(u) && !!u.photoPath &&
   u.approval === "aprovado" &&
   u.credentialExpires > now &&
   !(u.suspendedUntil > now);
@@ -210,6 +212,7 @@ function view(state, actor, now) {
     ),
   );
   if (actor.admin) return { ...state, notifications, me, now };
+  if (!verified(me)) return {me,users:{[me.id]:me},bookings:{},reviews:{},messages:[],conversations:{},notifications,tickets:Object.fromEntries(Object.entries(state.tickets).filter(([,t])=>t.owner===actor.uid)),audit:[],now};
   const bookings = Object.fromEntries(
     Object.entries(state.bookings).filter(([, b]) =>
       [b.student, b.instructor].includes(actor.uid),
@@ -240,6 +243,7 @@ function view(state, actor, now) {
         specialty,
         approval,
         credentialExpires,
+        photoPath,
       } = u;
       users[id] = {
         id,
@@ -253,6 +257,8 @@ function view(state, actor, now) {
         specialty: specialty || "",
         approval: approval || "",
         credentialExpires: credentialExpires || 0,
+        photoPath,
+        eligible: approved(u, now),
         slots: approved(u, now) ? slots(state, id, now) : [],
       };
     }
@@ -292,6 +298,7 @@ function execute(
   input = {},
   now = Date.now(),
   id = "operation",
+  trusted = {},
 ) {
   check(actor?.uid, "Autenticação obrigatória.");
   const s = structuredClone(original || empty());
@@ -312,6 +319,7 @@ function execute(
       name: text(input.name, 120),
       role: input.role,
       favorites: [],
+      identity: {status:"nao_enviada"},
       ...(input.role === "instrutor"
         ? {
             approval: "pendente",
@@ -327,6 +335,7 @@ function execute(
     };
   } else {
     user();
+    assertOperational(me, actor, op);
     const b = s.bookings[input.booking];
     const participant = () => {
       check(!!b, "Reserva não encontrada.");
@@ -346,7 +355,7 @@ function execute(
       participant();
       check(b.student === actor.uid, "Ação exclusiva do aluno.");
     };
-    switch (op) {
+    if (!identityOperation(s, actor, op, input, now, id, trusted)) switch (op) {
       case "profile": {
         check(text(input.name).length >= 3, "Informe seu nome.");
         Object.assign(me, {
@@ -471,6 +480,8 @@ function execute(
         break;
       case "pay":
         student();
+        check(s.users[b.student]?.photoPath && s.users[b.instructor]?.photoPath, "Ambos os participantes precisam de foto de perfil para confirmar a aula. Acesse Editar perfil.");
+        check(verified(s.users[b.student]) && verified(s.users[b.instructor]), "Os participantes precisam de identidade aprovada pela administração.");
         check(
           b.status === "aguardando_pagamento" && b.start > now,
           "Pagamento indisponível.",

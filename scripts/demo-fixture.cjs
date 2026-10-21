@@ -23,7 +23,7 @@ function demoFixture(now, scope, identities = {}) {
   const state = empty();
   for (const a of accounts) {
     const uid = identities[a.role] || a.uid;
-    state.users[uid] = { id: uid, name: a.name, role: a.role, favorites: [] };
+    state.users[uid] = { id: uid, name: a.name, role: a.role, favorites: [], photoPath:a.role === "admin" ? null : `profilePhotos/${scope}/${uid}/demo.png`, identity:{status:"aprovado",reason:"Análise manual fictícia do cenário acadêmico",reviewedAt:now,reviewedBy:identities.admin || "demo-admin"} };
   }
   Object.assign(state.users[instructor], {
     region: "Centro · Niterói, RJ",

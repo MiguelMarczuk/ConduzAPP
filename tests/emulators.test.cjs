@@ -16,6 +16,7 @@ const {
 } = require("@firebase/rules-unit-testing");
 const { doc, getDoc, setDoc } = require("firebase/firestore");
 const { ref, uploadBytes, getBytes, listAll } = require("firebase/storage");
+const {deleteObject} = require("firebase/storage");
 const { empty, HOUR, DAY } = require("../functions/domain");
 initializeApp({ projectId: "demo-conduzapp" });
 const db = require("../functions/emulator-db").configureEmulatorFirestore(
@@ -90,7 +91,7 @@ before(async () => {
       id: u.uid,
       name: `Teste ${role}`,
       role: role === "outro" ? "aluno" : role,
-      favorites: [],
+      favorites: [], photoPath:"fixture/photo", identity:{status:"aprovado"},
     };
   Object.assign(baseline.users[users.instrutor.uid], {
     approval: "aprovado",
@@ -138,6 +139,39 @@ test("Function recusa acesso anônimo e elevação de privilégio", async () => 
   });
   assert.ok(r.error);
   assert.match(r.error.message, /administração/);
+});
+
+test("foto e documento: upload, persistência, análise e isolamento real no Storage",async()=>{
+ const uid=users.aluno.uid;
+ const owner=env.authenticatedContext(uid,{stateScope:scope}).storage('gs://demo-conduzapp.appspot.com');
+ const outsider=env.authenticatedContext(users.outro.uid,{stateScope:scope}).storage('gs://demo-conduzapp.appspot.com');
+ const administrator=env.authenticatedContext(users.admin.uid,{stateScope:scope,admin:true}).storage('gs://demo-conduzapp.appspot.com');
+ const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1cAAAAASUVORK5CYII=','base64');
+ const photo=`profilePhotos/${scope}/${uid}/profile.png`, document=`identityDocuments/${scope}/${uid}/document.png`;
+ await assertFails(uploadBytes(ref(outsider,photo),png,{contentType:'image/png'}));
+ await assertSucceeds(uploadBytes(ref(owner,photo),png,{contentType:'image/png'}));
+ assert.ok((await call('aluno','setPhoto',{path:photo})).result);
+ assert.equal((await call('aluno','state')).result.me.photoPath,photo);
+ await assertFails(deleteObject(ref(owner,photo)));
+ await assertFails(uploadBytes(ref(owner,photo),Buffer.concat([png,Buffer.from('changed')]),{contentType:'image/png'}));
+ await assertSucceeds(uploadBytes(ref(owner,document),png,{contentType:'image/png'}));
+ assert.ok((await call('aluno','submitIdentity',{path:document})).result);
+ assert.ok((await call('aluno','book',{instructor:users.instrutor.uid,start})).error);
+ await assertFails(getBytes(ref(outsider,document)));
+ await assertFails(getBytes(ref(env.unauthenticatedContext().storage('gs://demo-conduzapp.appspot.com'),document)));
+ await assertFails(getBytes(ref(env.authenticatedContext(uid,{stateScope:'test-foreign'}).storage('gs://demo-conduzapp.appspot.com'),document)));
+ await assertSucceeds(getBytes(ref(administrator,document)));
+ assert.equal((await call('outro','state')).result.users[uid],undefined);
+ let r=await call('admin','reviewIdentity',{user:uid,decision:'aprovado',reason:'Análise manual fictícia',documentPath:document,photoPath:photo});
+ assert.ok(r.result,JSON.stringify(r));
+ r=await call('aluno','state');assert.equal(r.result.me.identity.status,'aprovado');
+ assert.ok(Object.values(r.result.notifications).some(n=>n.event==='identity'));
+ assert.ok((await call('aluno','setPhoto',{path:`profilePhotos/${scope}/${users.outro.uid}/other.png`})).error);
+});
+test("backend recusa bytes falsos mesmo que MIME declare imagem",async()=>{
+ const path=`profilePhotos/${scope}/${users.aluno.uid}/invalid.png`;
+ await uploadBytes(ref(env.authenticatedContext(users.aluno.uid,{stateScope:scope}).storage('gs://demo-conduzapp.appspot.com'),path),Buffer.from('não é PNG'),{contentType:'image/png'});
+ const r=await call('aluno','setPhoto',{path});assert.ok(r.error);assert.match(r.error.message,/Arquivo inválido/);
 });
 test("duas reservas concorrentes: exatamente uma é aceita na transação", async () => {
   const results = await Promise.all(

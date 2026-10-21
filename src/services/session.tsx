@@ -30,6 +30,9 @@ export type Profile = {
   cancellations?: number;
   absences?: number;
   approvalReason?: string;
+  photoPath?: string | null;
+  eligible?: boolean;
+  identity?: {status:string;photoPath?:string;documentPath?:string;submittedAt?:number;reviewedAt?:number;reviewedBy?:string;reason?:string};
 };
 export type Booking = {
   id: string;

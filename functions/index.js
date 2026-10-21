@@ -32,6 +32,12 @@ exports.conduz = onCall({ cors: true, timeoutSeconds: 60 }, async (request) => {
   const id = randomUUID();
   const db = getDatabase();
   try {
+    const scope = statePath(request.auth.token).split('/')[1];
+    const trusted = {};
+    if (["setPhoto","submitIdentity"].includes(op)) {
+      const {getStorage} = require("firebase-admin/storage");
+      trusted.media = await require("./media").validateMedia(getStorage().bucket("demo-conduzapp.appspot.com"), actor.uid, scope, op, input?.path);
+    }
     return await db.runTransaction(async (tx) => {
       const ref = db.doc(statePath(request.auth.token));
       const snap = await tx.get(ref);
@@ -42,6 +48,7 @@ exports.conduz = onCall({ cors: true, timeoutSeconds: 60 }, async (request) => {
         input,
         Date.now(),
         id,
+        trusted,
       );
       if (result.write) {
         tx.set(ref, result.state);

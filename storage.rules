@@ -1,6 +1,18 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    function sameScope(scope) { return request.auth != null && scope == (('stateScope' in request.auth.token) ? request.auth.token.stateScope : 'state'); }
+    function imageUpload() { return request.resource.size > 0 && request.resource.size < 5 * 1024 * 1024 && request.resource.contentType.matches('image/(jpeg|png|webp)'); }
+    match /profilePhotos/{scope}/{owner}/{file} {
+      allow read: if sameScope(scope);
+      allow create: if resource == null && sameScope(scope) && request.auth.uid == owner && imageUpload();
+      allow update, delete: if false;
+    }
+    match /identityDocuments/{scope}/{owner}/{file} {
+      allow read: if sameScope(scope) && (request.auth.uid == owner || ('admin' in request.auth.token && request.auth.token.admin == true));
+      allow create: if resource == null && sameScope(scope) && request.auth.uid == owner && imageUpload();
+      allow update, delete: if false;
+    }
     function participant(booking) {
       let b = firestore.get(/databases/(default)/documents/bookingAccess/$(booking)).data;
       return request.auth != null && (request.auth.uid == b.student || request.auth.uid == b.instructor);

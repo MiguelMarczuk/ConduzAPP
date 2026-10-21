@@ -40,6 +40,12 @@ async function prepare() {
       );
   }
   // create recusa sobrescrita, inclusive se houver colisão de identificador.
+  const {getStorage} = adminRequire("firebase-admin/storage");
+  process.env.FIREBASE_STORAGE_EMULATOR_HOST = "127.0.0.1:9199";
+  const bucket=getStorage().bucket("demo-conduzapp.appspot.com");
+  for(const a of accounts.filter(a=>a.role!=="admin")) {
+    await bucket.file(state.users[a.uid].photoPath).save(fs.readFileSync(path.resolve(__dirname,"../assets/demo/perfil-ficticio.png")),{metadata:{contentType:"image/png"}});
+  }
   await db.doc(statePath({ stateScope: scope })).create(state);
   const b = state.bookings[state.demo.historicalBooking];
   await db
