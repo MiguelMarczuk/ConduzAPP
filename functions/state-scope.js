@@ -7,8 +7,19 @@ function statePath(token = {}) {
     throw new Error("Ambiente isolado inválido.");
   return `private/${token.stateScope}`;
 }
-function effectiveNow(state,token,realNow,emulator=process.env.FUNCTIONS_EMULATOR === 'true') {
- const scope=token?.stateScope;
- return emulator && /^demo-[a-zA-Z0-9-]{1,80}$/.test(scope||'') && state.demo?.scope===scope && Number.isFinite(state.demo.clockOffset) && Math.abs(state.demo.clockOffset)<=7*86400000 ? realNow+state.demo.clockOffset:realNow;
+function effectiveNow(
+  state,
+  token,
+  realNow,
+  emulator = process.env.FUNCTIONS_EMULATOR === "true",
+) {
+  const scope = token?.stateScope;
+  return emulator &&
+    /^demo-[a-zA-Z0-9-]{1,80}$/.test(scope || "") &&
+    state.demo?.scope === scope &&
+    Number.isFinite(state.demo.clockOffset) &&
+    Math.abs(state.demo.clockOffset) <= 7 * 86400000
+    ? realNow + state.demo.clockOffset
+    : realNow;
 }
-module.exports = { statePath,effectiveNow };
+module.exports = { statePath, effectiveNow };

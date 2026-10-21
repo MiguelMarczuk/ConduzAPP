@@ -33,7 +33,15 @@ export type Profile = {
   photoPath?: string | null;
   eligible?: boolean;
   featured?: boolean;
-  identity?: {status:string;photoPath?:string;documentPath?:string;submittedAt?:number;reviewedAt?:number;reviewedBy?:string;reason?:string};
+  identity?: {
+    status: string;
+    photoPath?: string;
+    documentPath?: string;
+    submittedAt?: number;
+    reviewedAt?: number;
+    reviewedBy?: string;
+    reason?: string;
+  };
 };
 export type Booking = {
   id: string;
@@ -46,13 +54,28 @@ export type Booking = {
   status: string;
   paid: boolean;
   location: string;
-  address?: {cep:string;street:string;number:string;neighborhood:string;city:string;uf:string};
-  groupId?:string;
-  lessonNumber?:number;
-  lessonCount?:number;
-  groupPrice?:number;
-  startCodeRequired?:boolean;
-  startConfirmation?:{status:string;code?:string;attempts?:number;availableAt:number;expiresAt:number;confirmedAt?:number;confirmedBy?:string};
+  address?: {
+    cep: string;
+    street: string;
+    number: string;
+    neighborhood: string;
+    city: string;
+    uf: string;
+  };
+  groupId?: string;
+  lessonNumber?: number;
+  lessonCount?: number;
+  groupPrice?: number;
+  startCodeRequired?: boolean;
+  startConfirmation?: {
+    status: string;
+    code?: string;
+    attempts?: number;
+    availableAt: number;
+    expiresAt: number;
+    confirmedAt?: number;
+    confirmedBy?: string;
+  };
   payoutEligible: boolean;
   studentConfirmed?: boolean;
   ratings?: Record<string, number>;
@@ -79,10 +102,10 @@ export type Ticket = {
   decision?: string;
 };
 export type State = {
-  demo?:{scope:string;clockOffset?:number};
-  demoClockActive?:boolean;
-  operationError?:string;
-  unreadCount?:number;
+  demo?: { scope: string; clockOffset?: number };
+  demoClockActive?: boolean;
+  operationError?: string;
+  unreadCount?: number;
   me: Profile | null;
   users: Record<string, Profile>;
   bookings: Record<string, Booking>;
@@ -114,7 +137,7 @@ export type State = {
     to: string;
     text: string;
     at: number;
-    readAt?:number;
+    readAt?: number;
   }[];
   tickets: Record<string, Ticket>;
   audit: { id: string; by: string; op: string; at: number }[];
@@ -189,8 +212,12 @@ export function Session({ children }: { children: ReactNode }) {
       const r = await invoke({ op, input });
       if (auth.currentUser?.uid !== uid) return false;
       setState(r.data);
-      setNotice("Alteração salva.");
-      if(r.data.operationError){setNotice("");setError(r.data.operationError);return false;}
+      setNotice(op === "readMessages" ? "" : "Alteração salva.");
+      if (r.data.operationError) {
+        setNotice("");
+        setError(r.data.operationError);
+        return false;
+      }
       return true;
     } catch (e: unknown) {
       if (auth.currentUser?.uid !== uid) return false;

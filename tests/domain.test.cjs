@@ -12,19 +12,24 @@ function fixture() {
     id: "student",
     name: "Aluno Teste",
     role: "aluno",
-    favorites: [], photoPath:"fixture/photo", identity:{status:"aprovado"},
+    favorites: [],
+    photoPath: "fixture/photo",
+    identity: { status: "aprovado" },
   };
   s.users.other = {
     id: "other",
     name: "Outro Aluno",
     role: "aluno",
-    favorites: [], photoPath:"fixture/photo", identity:{status:"aprovado"},
+    favorites: [],
+    photoPath: "fixture/photo",
+    identity: { status: "aprovado" },
   };
   s.users.teacher = {
     id: "teacher",
     name: "Instrutor Teste",
     role: "instrutor",
-    photoPath:"fixture/teacher", identity:{status:"aprovado"},
+    photoPath: "fixture/teacher",
+    identity: { status: "aprovado" },
     approval: "aprovado",
     credential: "FICTICIA",
     credentialExpires: now + 30 * DAY,
@@ -36,19 +41,38 @@ function fixture() {
   return s;
 }
 const act = (s, a, op, input = {}, time = now, id = "b1") =>
-  execute(s, a, op, op === "book" ? {address:{cep:"",street:"Rua Fictícia",number:"s/n",neighborhood:"Centro",city:"Niterói",uf:"RJ"},...input}:input, time, id).state;
+  execute(
+    s,
+    a,
+    op,
+    op === "book"
+      ? {
+          address: {
+            cep: "",
+            street: "Rua Fictícia",
+            number: "s/n",
+            neighborhood: "Centro",
+            city: "Niterói",
+            uf: "RJ",
+          },
+          ...input,
+        }
+      : input,
+    time,
+    id,
+  ).state;
 function booked() {
   return act(fixture(), actor, "book", { instructor: "teacher", start });
 }
 function paid() {
-  const result=act(
+  const result = act(
     act(booked(), teacher, "accept", { booking: "b1" }),
     actor,
     "pay",
     { booking: "b1" },
   );
   // Cenário legado das regras financeiras; novos códigos têm suíte própria.
-  result.bookings.b1.startCodeRequired=false;
+  result.bookings.b1.startCodeRequired = false;
   return result;
 }
 test("autenticação obrigatória e cadastro sem elevação de privilégio", () => {

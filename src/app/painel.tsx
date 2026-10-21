@@ -32,11 +32,16 @@ import { Badge } from "@/components/ui/badge";
 import { MenuRow } from "@/components/ui/menu-row";
 import { UI } from "@/constants/theme";
 import { panelStyles as s } from "@/constants/panel-styles";
-import {IdentityPanel,IdentityAdmin} from "@/components/identity-panel";
-import {AddressForm} from "@/components/address-form";
-import {StartConfirmation} from "@/components/start-confirmation";
-import {emptyAddress} from "@/lib/cep";
-import {homeTab,bookingFilters,matchesBooking,instructorList} from "@/lib/presentation";
+import { IdentityPanel, IdentityAdmin } from "@/components/identity-panel";
+import { AddressForm } from "@/components/address-form";
+import { StartConfirmation } from "@/components/start-confirmation";
+import { emptyAddress } from "@/lib/cep";
+import {
+  homeTab,
+  bookingFilters,
+  matchesBooking,
+  instructorList,
+} from "@/lib/presentation";
 const labels: Record<string, string> = {
   solicitado: "Solicitação enviada",
   aguardando_pagamento: "Aguardando pagamento",
@@ -120,10 +125,10 @@ export default function Painel() {
     params.instructor || null,
   );
   const scrollRef = useRef<ScrollView>(null);
-  const [searchKey,setSearchKey]=useState(0);
+  const [searchKey, setSearchKey] = useState(0);
   useEffect(() => {
     scrollRef.current?.scrollTo({ y: 0, animated: false });
-  }, [tab, selected, showNotifications]);
+  }, [tab, selected, showNotifications, api.state?.me?.identity?.status]);
   const me = api.state?.me;
   if (api.loading)
     return (
@@ -153,16 +158,31 @@ export default function Painel() {
         </ScrollView>
       </SafeAreaView>
     );
-  const identityPending = me.role !== "admin" && me.identity?.status !== "aprovado";
-  const tabs = identityPending ? ["Perfil"] :
-    me.role === "admin"
+  const identityPending =
+    me.role !== "admin" && me.identity?.status !== "aprovado";
+  const tabs = identityPending
+    ? ["Perfil"]
+    : me.role === "admin"
       ? ["Início", "Ocorrências", "Agendamentos", "Perfil"]
       : ["Início", "Agendamentos", "Mensagens", "Perfil"];
   return (
     <SafeAreaView style={s.page}>
       <View style={s.top}>
         <View style={s.topInner}>
-          <TouchableOpacity accessibilityRole="button" accessibilityLabel="ConduzAPP — início" onPress={()=>{api.clear();setTab(homeTab(me.role,identityPending));setSelected(null);setFavoritesOnly(false);setMessageTo(undefined);setShowNotifications(false);setSearchKey(k=>k+1);scrollRef.current?.scrollTo({y:0,animated:false});}}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="ConduzAPP — início"
+            onPress={() => {
+              api.clear();
+              setTab(homeTab(me.role, identityPending));
+              setSelected(null);
+              setFavoritesOnly(false);
+              setMessageTo(undefined);
+              setShowNotifications(false);
+              setSearchKey((k) => k + 1);
+              scrollRef.current?.scrollTo({ y: 0, animated: false });
+            }}
+          >
             <Text style={s.brand}>
               CONDUZ<Text style={s.brandAccent}> APP</Text>
             </Text>
@@ -203,7 +223,24 @@ export default function Painel() {
           <Text style={s.error}>{api.error}</Text>
         </View>
       )}
-      {api.state?.demoClockActive && <View style={s.notice}><Text>Relógio do ensaio ativo · {dateTime(api.state.now)} · dados fictícios</Text>{me.role==='admin'&&<Button title="Restaurar relógio do ensaio" variant="secondary" onPress={async()=>{if(await api.run('setDemoClock',{stage:'reset'}))await api.refresh();}}/>}</View>}
+      {api.state?.demoClockActive && (
+        <View style={s.notice}>
+          <Text>
+            Relógio do ensaio ativo · {dateTime(api.state.now)} · dados
+            fictícios
+          </Text>
+          {me.role === "admin" && (
+            <Button
+              title="Restaurar relógio do ensaio"
+              variant="secondary"
+              onPress={async () => {
+                if (await api.run("setDemoClock", { stage: "reset" }))
+                  await api.refresh();
+              }}
+            />
+          )}
+        </View>
+      )}
       {!!api.notice && (
         <TouchableOpacity onPress={api.clear} style={s.notice}>
           <Text style={s.link}>{api.notice}</Text>
@@ -216,19 +253,32 @@ export default function Painel() {
       >
         {showNotifications && (
           <Notifications
+            goProfile={() => {
+              setTab("Perfil");
+              setShowNotifications(false);
+            }}
             goBookings={() => {
               setTab("Agendamentos");
               setShowNotifications(false);
             }}
           />
         )}
-        {identityPending ? <View style={s.gap}><Heading title="Seu cadastro está aguardando análise." sub="Complete a foto e a verificação de identidade. Reservas anteriores não foram canceladas; use o suporte para acompanhar ocorrências."/><Profile/></View> : me.role === "admin" ? (
+        {identityPending ? (
+          <View style={s.gap}>
+            <Heading
+              title="Seu cadastro está aguardando análise."
+              sub="Complete a foto e a verificação de identidade. Reservas anteriores não foram canceladas; use o suporte para acompanhar ocorrências."
+            />
+            <Profile />
+          </View>
+        ) : me.role === "admin" ? (
           <Admin tab={tab} />
         ) : (
           <>
             {tab === "Início" &&
               (me.role === "aluno" ? (
-                <Search key={searchKey}
+                <Search
+                  key={searchKey}
                   initialFavorites={favoritesOnly}
                   selected={selected}
                   select={setSelected}
@@ -245,7 +295,13 @@ export default function Painel() {
               <ReviewsPage goBack={() => setTab("Perfil")} />
             )}
             {tab === "Mensagens" && (
-              <Messages key={me.id} initialTo={messageTo} onOpen={()=>scrollRef.current?.scrollTo({y:0,animated:false})} />
+              <Messages
+                key={me.id}
+                initialTo={messageTo}
+                onOpen={() =>
+                  scrollRef.current?.scrollTo({ y: 0, animated: false })
+                }
+              />
             )}
             {tab === "Perfil" && (
               <Profile
@@ -268,10 +324,17 @@ export default function Painel() {
           {tabs.map((t) => (
             <TouchableOpacity
               key={t}
-              accessibilityLabel={t === "Mensagens" ? `Mensagens (${api.state?.unreadCount||0} não lidas)` : t}
+              accessibilityLabel={
+                t === "Mensagens"
+                  ? `Mensagens (${api.state?.unreadCount || 0} não lidas)`
+                  : t
+              }
               accessibilityRole="tab"
               accessibilityState={{
-                selected: tab === t || (tab === "Avaliações" && t === "Perfil"),
+                selected:
+                  (identityPending && t === "Perfil") ||
+                  tab === t ||
+                  (tab === "Avaliações" && t === "Perfil"),
               }}
               onPress={() => {
                 api.clear();
@@ -282,32 +345,48 @@ export default function Painel() {
               }}
               style={[
                 s.tab,
-                (tab === t || (tab === "Avaliações" && t === "Perfil")) &&
+                ((identityPending && t === "Perfil") ||
+                  tab === t ||
+                  (tab === "Avaliações" && t === "Perfil")) &&
                   s.tabActive,
               ]}
             >
               <View
                 style={[
                   s.navIcon,
-                  (tab === t || (tab === "Avaliações" && t === "Perfil")) &&
+                  ((identityPending && t === "Perfil") ||
+                    tab === t ||
+                    (tab === "Avaliações" && t === "Perfil")) &&
                     s.navIconActive,
                 ]}
               >
                 <Icon
                   name={tabIcons[t]}
                   color={
-                    tab === t || (tab === "Avaliações" && t === "Perfil")
+                    (identityPending && t === "Perfil") ||
+                    tab === t ||
+                    (tab === "Avaliações" && t === "Perfil")
                       ? UI.color.primary
                       : UI.color.textSecondary
                   }
                   size={22}
                 />
-                {t === "Mensagens" && !!api.state?.unreadCount && <View style={s.unreadBadge}><Text style={s.unreadText}>{api.state.unreadCount>99?"99+":api.state.unreadCount}</Text></View>}
+                {t === "Mensagens" && !!api.state?.unreadCount && (
+                  <View style={s.unreadBadge}>
+                    <Text style={s.unreadText}>
+                      {api.state.unreadCount > 99
+                        ? "99+"
+                        : api.state.unreadCount}
+                    </Text>
+                  </View>
+                )}
               </View>
               <Text
                 style={[
                   s.tabLabel,
-                  (tab === t || (tab === "Avaliações" && t === "Perfil")) &&
+                  ((identityPending && t === "Perfil") ||
+                    tab === t ||
+                    (tab === "Avaliações" && t === "Perfil")) &&
                     s.tabLabelActive,
                 ]}
               >
@@ -320,7 +399,13 @@ export default function Painel() {
     </SafeAreaView>
   );
 }
-function Notifications({ goBookings }: { goBookings: () => void }) {
+function Notifications({
+  goBookings,
+  goProfile,
+}: {
+  goBookings: () => void;
+  goProfile: () => void;
+}) {
   const { state, run } = useSession();
   const list = Object.values(state!.notifications || {}).sort(
     (a, b) => b.at - a.at,
@@ -344,7 +429,10 @@ function Notifications({ goBookings }: { goBookings: () => void }) {
           <Text style={s.small}>
             {dateTime(n.at)} · {n.readAt ? "Lida" : "Não lida"}
           </Text>
-          <Action title="Ver agendamentos" onPress={goBookings} />
+          <Action
+            title={n.event === "identity" ? "Ver perfil" : "Ver agendamentos"}
+            onPress={n.event === "identity" ? goProfile : goBookings}
+          />
           {!n.readAt && (
             <Action
               title="Marcar como lida"
@@ -399,19 +487,32 @@ function Search({
 }) {
   const { state, run, busy } = useSession();
   const [search, setSearch] = useState("");
-  const [mode,setMode]=useState(initialFavorites?"favoritos":"avulsas");
-  const onlyFavorites=mode === "favoritos";
-  const setOnlyFavorites=(value:boolean)=>setMode(value?"favoritos":"avulsas");
-  const [lessonCount,setLessonCount]=useState(1);
+  const [mode, setMode] = useState(initialFavorites ? "favoritos" : "avulsas");
+  const onlyFavorites = mode === "favoritos";
+  const setOnlyFavorites = (value: boolean) =>
+    setMode(value ? "favoritos" : "avulsas");
+  const [lessonCount, setLessonCount] = useState(1);
   const [slot, setSlot] = useState<number | null>(null);
   const [chosenDay, setChosenDay] = useState("");
   const [showDetails, setShowDetails] = useState(false);
-  const [meetingAddress,setMeetingAddress]=useState({...emptyAddress});
+  const [meetingAddress, setMeetingAddress] = useState({ ...emptyAddress });
   const me = state!.me!;
-  const instructors=Object.values(state!.users).filter(u=>u.role === "instrutor" && u.eligible);
-  const visible=instructorList(Object.values(state!.users),mode,search,me.favorites);
+  const instructors = Object.values(state!.users).filter(
+    (u) => u.role === "instrutor" && u.eligible,
+  );
+  const visible = instructorList(
+    Object.values(state!.users),
+    mode,
+    search,
+    me.favorites,
+  );
   const u = selected ? state!.users[selected] : null;
-  const availableSlots=(u?.slots||[]).filter(t=>lessonCount===1 || ((u?.slots||[]).includes(t+3600000) && dayKey(t)===dayKey(t+3600000)));
+  const availableSlots = (u?.slots || []).filter(
+    (t) =>
+      lessonCount === 1 ||
+      ((u?.slots || []).includes(t + 3600000) &&
+        dayKey(t) === dayKey(t + 3600000)),
+  );
   const days = Array.from({ length: 7 }, (_, i) => state!.now + i * 86400000);
   const activeDay = days.some((d) => dayKey(d) === chosenDay)
     ? chosenDay
@@ -511,7 +612,19 @@ function Search({
           </View>
         </Card>
         <Card style={s.sectionCard}>
-          <View style={s.row}>{[1,2].map(count=><Button key={count} title={count===1?"1 aula · 60 min":"2 aulas · 120 min"} variant={lessonCount===count?"primary":"secondary"} onPress={()=>{setLessonCount(count);setSlot(null);}}/>)}</View>
+          <View style={s.row}>
+            {[1, 2].map((count) => (
+              <Button
+                key={count}
+                title={count === 1 ? "1 aula · 60 min" : "2 aulas · 120 min"}
+                variant={lessonCount === count ? "primary" : "secondary"}
+                onPress={() => {
+                  setLessonCount(count);
+                  setSlot(null);
+                }}
+              />
+            ))}
+          </View>
           <View style={s.sectionHeading}>
             <Icon name="calendar" />
             <Text style={s.cardTitle}>Selecionar data</Text>
@@ -524,9 +637,7 @@ function Search({
           >
             {days.map((day) => {
               const key = dayKey(day),
-                available = availableSlots.some(
-                  (time) => dayKey(time) === key,
-                );
+                available = availableSlots.some((time) => dayKey(time) === key);
               return (
                 <TouchableOpacity
                   key={key}
@@ -599,20 +710,27 @@ function Search({
             </Text>
           )}
           <View style={s.divider} />
-          <AddressForm value={meetingAddress} onChange={setMeetingAddress}/>
+          <AddressForm value={meetingAddress} onChange={setMeetingAddress} />
           <View style={s.summary}>
             <View style={s.flex}>
-              <Text style={s.small}>{lessonCount} {lessonCount===1?"aula":"aulas consecutivas"} · {lessonCount*60} minutos</Text>
+              <Text style={s.small}>
+                {lessonCount}{" "}
+                {lessonCount === 1 ? "aula" : "aulas consecutivas"} ·{" "}
+                {lessonCount * 60} minutos
+              </Text>
               <Text style={s.cardTitle}>
                 {activeSlot ? dateTime(activeSlot) : "Selecione data e horário"}
               </Text>
             </View>
-            <Text style={s.price}>{money((u.price||0)*lessonCount)}</Text>
+            <Text style={s.price}>{money((u.price || 0) * lessonCount)}</Text>
           </View>
           <Button
             title={
               activeSlot
-                ? "Solicitar " + lessonCount + (lessonCount===1?" aula · ":" aulas · ") + money((u.price||0)*lessonCount)
+                ? "Solicitar " +
+                  lessonCount +
+                  (lessonCount === 1 ? " aula · " : " aulas · ") +
+                  money((u.price || 0) * lessonCount)
                 : "Selecione um horário"
             }
             disabled={!activeSlot || busy}
@@ -622,7 +740,7 @@ function Search({
                   instructor: u.id,
                   start: activeSlot,
                   lessonCount,
-                  address:meetingAddress,
+                  address: meetingAddress,
                 })
               ) {
                 setSlot(null);
@@ -633,7 +751,8 @@ function Search({
           />
           <Text style={s.small}>
             A solicitação depende do aceite do instrutor. O pagamento simulado
-            fica disponível depois do aceite. Duas aulas são acompanhadas individualmente, com as regras existentes para cada aula.
+            fica disponível depois do aceite. Duas aulas são acompanhadas
+            individualmente, com as regras existentes para cada aula.
           </Text>
         </Card>
         <Reviews uid={u.id} />
@@ -644,7 +763,9 @@ function Search({
       <View style={s.welcome}>
         <Text style={s.title}>Olá, {me.name.split(" ")[0]}!</Text>
         <Text style={s.welcomeText}>
-          {mode === "instrutores" ? "Lista completa de profissionais aptos a receber reservas." : "Encontre o instrutor ideal para suas aulas."}
+          {mode === "instrutores"
+            ? "Lista completa de profissionais aptos a receber reservas."
+            : "Encontre o instrutor ideal para suas aulas."}
         </Text>
       </View>
       <Input
@@ -701,7 +822,13 @@ function Search({
       </View>
       <View style={s.sectionHeading}>
         <Text style={[s.cardTitle, s.flex]}>
-          {mode === "instrutores" ? "Todos os instrutores aprovados" : onlyFavorites ? "Seus favoritos" : instructors.some(u=>u.featured)?"Instrutores em destaque":"Instrutores disponíveis"}
+          {mode === "instrutores"
+            ? "Todos os instrutores aprovados"
+            : onlyFavorites
+              ? "Seus favoritos"
+              : instructors.some((u) => u.featured)
+                ? "Instrutores em destaque"
+                : "Instrutores disponíveis"}
         </Text>
         <Text style={s.small}>
           {visible.length}{" "}
@@ -954,36 +1081,62 @@ function Availability() {
 }
 function Bookings() {
   const { state } = useSession();
-  const [filter,setFilter]=useState("Todas");
-  const all=Object.values(state!.bookings).sort((a,b)=>b.start-a.start);
-  const list=all.filter(b=>matchesBooking(b,filter));
+  const [filter, setFilter] = useState("Todas");
+  const all = Object.values(state!.bookings).sort((a, b) => b.start - a.start);
+  const list = all.filter((b) => matchesBooking(b, filter));
   return (
     <View style={s.gap}>
       <Heading
         title="Seus agendamentos"
         sub="Solicitações, pagamentos e histórico em um só lugar."
       />
-      <View style={s.row}>{bookingFilters.map(f=><TouchableOpacity key={f} accessibilityRole="button" accessibilityState={{selected:filter===f}} style={[s.chip,filter===f&&s.slotActive]} onPress={()=>setFilter(f)}><Text style={filter===f?s.white:s.link}>{f} ({all.filter(b=>matchesBooking(b,f)).length})</Text></TouchableOpacity>)}</View>
+      <View style={s.row}>
+        {bookingFilters.map((f) => (
+          <TouchableOpacity
+            key={f}
+            accessibilityRole="button"
+            accessibilityState={{ selected: filter === f }}
+            style={[s.chip, filter === f && s.slotActive]}
+            onPress={() => setFilter(f)}
+          >
+            <Text style={filter === f ? s.white : s.link}>
+              {f} ({all.filter((b) => matchesBooking(b, f)).length})
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
       {list.map((b) => (
         <BookingCard key={b.id} booking={b} />
       ))}
       {!list.length && (
         <Card>
-          <Text>Você ainda não tem aulas agendadas.</Text>
+          <Text>
+            {all.length
+              ? "Nenhuma aula neste filtro."
+              : "Você ainda não tem aulas agendadas."}
+          </Text>
         </Card>
       )}
     </View>
   );
 }
 function BookingCard({ booking: b }: { booking: Booking }) {
+  const router = useRouter();
   const { state, run } = useSession();
   const me = state!.me!;
   const student = me.id === b.student,
     teacher = me.id === b.instructor,
     admin = me.role === "admin";
   const now = state!.now;
-  const groupPending=b.groupId?Object.values(state!.bookings).filter(x=>x.groupId===b.groupId && !x.paid && ["solicitado","aguardando_pagamento"].includes(x.status)): [b];
-  const paymentTotal=groupPending.reduce((sum,x)=>sum+x.price,0);
+  const groupPending = b.groupId
+    ? Object.values(state!.bookings).filter(
+        (x) =>
+          x.groupId === b.groupId &&
+          !x.paid &&
+          ["solicitado", "aguardando_pagamento"].includes(x.status),
+      )
+    : [b];
+  const paymentTotal = groupPending.reduce((sum, x) => sum + x.price, 0);
   const [expand, setExpand] = useState(false),
     [reason, setReason] = useState(""),
     [newStart, setNewStart] = useState("");
@@ -991,7 +1144,11 @@ function BookingCard({ booking: b }: { booking: Booking }) {
   return (
     <Card style={s.gap}>
       <View style={s.row}>
-        <Avatar foto={other?.photoPath} nome={other?.name || "Aula"} size={48} />
+        <Avatar
+          foto={other?.photoPath}
+          nome={other?.name || "Aula"}
+          size={48}
+        />
         <View style={s.flex}>
           <Text style={s.cardTitle}>{other?.name || "Aula"}</Text>
           <Text style={s.muted}>
@@ -1016,7 +1173,12 @@ function BookingCard({ booking: b }: { booking: Booking }) {
           {b.paid ? "Pagamento simulado confirmado" : "Sem pagamento"}
         </Text>
       </View>
-      {!!b.groupId&&<Text style={s.small}>Aula {b.lessonNumber}/2 · solicitação conjunta de 120 min · total contratado {money(b.groupPrice)}. Gestão individual por aula.</Text>}
+      {!!b.groupId && (
+        <Text style={s.small}>
+          Aula {b.lessonNumber}/2 · solicitação conjunta de 120 min · total
+          contratado {money(b.groupPrice)}. Gestão individual por aula.
+        </Text>
+      )}
       <View style={s.vehicleLine}>
         <Icon name="pin" size={17} color={UI.color.textSecondary} />
         <Text style={s.small}>
@@ -1035,17 +1197,31 @@ function BookingCard({ booking: b }: { booking: Booking }) {
       />
       {expand && (
         <View style={s.gap}>
-          <StartConfirmation booking={b}/>
+          <StartConfirmation booking={b} />
           {teacher && b.status === "solicitado" && (
             <Action
               title="Aceitar solicitação"
               onPress={() => run("accept", { booking: b.id })}
             />
           )}
-          {(student || teacher) && (!state!.users[b.student]?.photoPath || !state!.users[b.instructor]?.photoPath) && <Text style={s.error}>Ambos precisam de foto de perfil para confirmar. Acesse Perfil para adicionar ou substituir sua foto. Aulas antigas não foram canceladas.</Text>}
+          {(student || teacher) &&
+            (!state!.users[b.student]?.photoPath ||
+              !state!.users[b.instructor]?.photoPath) && (
+              <>
+                <Text style={s.error}>
+                  Ambos precisam de foto de perfil para confirmar. Aulas antigas
+                  não foram canceladas.
+                </Text>
+                <Button
+                  title="Adicionar foto no Perfil"
+                  variant="secondary"
+                  onPress={() => router.push("/perfil")}
+                />
+              </>
+            )}
           {student && b.status === "aguardando_pagamento" && (
             <Button
-              title={"Confirmar pagamento SIMULADO · "+money(paymentTotal)}
+              title={"Confirmar pagamento SIMULADO · " + money(paymentTotal)}
               onPress={() => run("pay", { booking: b.id })}
             />
           )}
@@ -1275,8 +1451,14 @@ function Evidence({ booking: b }: { booking: Booking }) {
     </Card>
   );
 }
-function Messages({ initialTo,onOpen }: { initialTo?: string;onOpen:()=>void }) {
-  const { state, run,busy } = useSession();
+function Messages({
+  initialTo,
+  onOpen,
+}: {
+  initialTo?: string;
+  onOpen: () => void;
+}) {
+  const { state, run, busy } = useSession();
   const me = state!.me!;
   const [search, setSearch] = useState("");
   const [to, setTo] = useState(initialTo || ""),
@@ -1286,11 +1468,29 @@ function Messages({ initialTo,onOpen }: { initialTo?: string;onOpen:()=>void }) 
     text: string;
     requestId: string;
   } | null>(null);
-  const [foreground,setForeground]=useState(AppState.currentState === "active");
-  const readAttempt=useRef("");
-  useEffect(()=>{const sub=AppState.addEventListener("change",v=>setForeground(v === "active"));return()=>sub.remove();},[]);
-  useEffect(()=>{if(to)onOpen();},[to]);
-  useEffect(()=>{if(!to||!foreground||busy)return;const ids=state!.messages.filter(m=>m.from===to && m.to===me.id && !m.readAt).map(m=>m.id);const key=ids.join(",");if(!key||readAttempt.current===key)return;readAttempt.current=key;void run("readMessages",{to,messages:ids});},[to,foreground,state?.messages,busy,me.id]);
+  const [foreground, setForeground] = useState(
+    AppState.currentState === "active",
+  );
+  const readAttempt = useRef("");
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (v) =>
+      setForeground(v === "active"),
+    );
+    return () => sub.remove();
+  }, []);
+  useEffect(() => {
+    if (to) onOpen();
+  }, [to]);
+  useEffect(() => {
+    if (!to || !foreground || busy) return;
+    const ids = state!.messages
+      .filter((m) => m.from === to && m.to === me.id && !m.readAt)
+      .map((m) => m.id);
+    const key = ids.join(",");
+    if (!key || readAttempt.current === key) return;
+    readAttempt.current = key;
+    void run("readMessages", { to, messages: ids });
+  }, [to, foreground, state?.messages, busy, me.id]);
   const participants = [
     ...new Set(
       Object.values(state!.conversations || {}).map((b) =>
@@ -1304,81 +1504,95 @@ function Messages({ initialTo,onOpen }: { initialTo?: string;onOpen:()=>void }) 
         title="Mensagens"
         sub="Converse sobre suas aulas e o ponto de encontro."
       />
-      {!to && <>
-      <Input
-        leadingIcon="search"
-        placeholder="Buscar conversa…"
-        accessibilityLabel="Buscar conversa"
-        value={search}
-        onChangeText={setSearch}
-      />
-      <View style={s.gap}>
-        {participants
-          .filter((id) =>
-            (state!.users[id]?.name || "Participante")
-              .toLowerCase()
-              .includes(search.toLowerCase()),
-          )
-          .map((id) => {
-            const name = state!.users[id]?.name || "Participante";
-            const tag =
-              Object.values(state!.conversations).find((c) =>
-                [c.student, c.instructor].includes(id),
-              )?.tag || "SEM AGENDAMENTO";
-            const last = state!.messages
-              .filter((msg) => [msg.from, msg.to].includes(id))
-              .slice(-1)[0];
-            return (
-              <TouchableOpacity
-                key={id}
-                accessibilityRole="button"
-                accessibilityLabel={"Conversa com " + name}
-                accessibilityState={{ selected: to === id }}
-                style={[s.conversation, to === id && s.conversationActive]}
-                onPress={() => setTo(id)}
-              >
-                <Avatar foto={state!.users[id]?.photoPath} nome={name} size={48} />
-                <View style={s.conversationInfo}>
-                  <Text style={s.conversationName}>{name}</Text>
-                  <Text numberOfLines={1} style={s.small}>
-                    {last
-                      ? (last.from === me.id ? "Você: " : "") + last.text
-                      : "Comece a conversa sobre sua próxima aula."}
-                  </Text>
-                  <Badge
-                    title={tag}
-                    tone={tag === "AGENDADO" ? "success" : "neutral"}
-                  />
-                </View>
-                <Icon name="chevron" size={16} />
-              </TouchableOpacity>
-            );
-          })}
-      </View>
-      {!!participants.length &&
-        !participants.some((id) =>
-          (state!.users[id]?.name || "Participante")
-            .toLowerCase()
-            .includes(search.toLowerCase()),
-        ) && <Text style={s.muted}>Nenhuma conversa encontrada.</Text>}
-      {!participants.length && (
-        <Card style={s.empty}>
-          <Icon name="message" size={36} />
-          <Text style={s.cardTitle}>
-            Sua próxima aula começa com uma conversa
-          </Text>
-          <Text style={s.muted}>
-            Abra o perfil de um instrutor aprovado e toque em Conversar com o
-            instrutor.
-          </Text>
-        </Card>
+      {!to && (
+        <>
+          <Input
+            leadingIcon="search"
+            placeholder="Buscar conversa…"
+            accessibilityLabel="Buscar conversa"
+            value={search}
+            onChangeText={setSearch}
+          />
+          <View style={s.gap}>
+            {participants
+              .filter((id) =>
+                (state!.users[id]?.name || "Participante")
+                  .toLowerCase()
+                  .includes(search.toLowerCase()),
+              )
+              .map((id) => {
+                const name = state!.users[id]?.name || "Participante";
+                const tag =
+                  Object.values(state!.conversations).find((c) =>
+                    [c.student, c.instructor].includes(id),
+                  )?.tag || "SEM AGENDAMENTO";
+                const last = state!.messages
+                  .filter((msg) => [msg.from, msg.to].includes(id))
+                  .slice(-1)[0];
+                return (
+                  <TouchableOpacity
+                    key={id}
+                    accessibilityRole="button"
+                    accessibilityLabel={"Conversa com " + name}
+                    accessibilityState={{ selected: to === id }}
+                    style={[s.conversation, to === id && s.conversationActive]}
+                    onPress={() => setTo(id)}
+                  >
+                    <Avatar
+                      foto={state!.users[id]?.photoPath}
+                      nome={name}
+                      size={48}
+                    />
+                    <View style={s.conversationInfo}>
+                      <Text style={s.conversationName}>{name}</Text>
+                      <Text numberOfLines={1} style={s.small}>
+                        {last
+                          ? (last.from === me.id ? "Você: " : "") + last.text
+                          : "Comece a conversa sobre sua próxima aula."}
+                      </Text>
+                      <Badge
+                        title={tag}
+                        tone={tag === "AGENDADO" ? "success" : "neutral"}
+                      />
+                    </View>
+                    <Icon name="chevron" size={16} />
+                  </TouchableOpacity>
+                );
+              })}
+          </View>
+          {!!participants.length &&
+            !participants.some((id) =>
+              (state!.users[id]?.name || "Participante")
+                .toLowerCase()
+                .includes(search.toLowerCase()),
+            ) && <Text style={s.muted}>Nenhuma conversa encontrada.</Text>}
+          {!participants.length && (
+            <Card style={s.empty}>
+              <Icon name="message" size={36} />
+              <Text style={s.cardTitle}>
+                Sua próxima aula começa com uma conversa
+              </Text>
+              <Text style={s.muted}>
+                Abra o perfil de um instrutor aprovado e toque em Conversar com
+                o instrutor.
+              </Text>
+            </Card>
+          )}
+        </>
       )}
-      </>}
       {!!to && (
         <Card style={s.gap}>
-          <Button title="Voltar às conversas" variant="secondary" onPress={()=>setTo("")}/>
+          <Button
+            title="Voltar às conversas"
+            variant="secondary"
+            onPress={() => setTo("")}
+          />
           <View style={s.chatHeader}>
-            <Avatar foto={state!.users[to]?.photoPath} nome={state!.users[to]?.name || "Participante"} size={40} />
+            <Avatar
+              foto={state!.users[to]?.photoPath}
+              nome={state!.users[to]?.name || "Participante"}
+              size={40}
+            />
             <View style={s.flex}>
               <Text style={s.cardTitle}>{state!.users[to]?.name}</Text>
               <Text style={s.small}>Conversa privada entre participantes</Text>
@@ -1518,7 +1732,11 @@ function Reviews({ uid }: { uid: string }) {
         return (
           <Card key={r.id} style={s.gap}>
             <View style={s.reviewHeader}>
-              <Avatar foto={r.from ? state!.users[r.from]?.photoPath : undefined} nome={author || "Participante"} size={42} />
+              <Avatar
+                foto={r.from ? state!.users[r.from]?.photoPath : undefined}
+                nome={author || "Participante"}
+                size={42}
+              />
               <View style={s.flex}>
                 <Text style={s.conversationName}>
                   {author || "Participante da aula"}
@@ -1578,7 +1796,10 @@ function Profile({ navigate }: { navigate?: (tab: string) => void }) {
         </Text>
         {!!me.region && <Text style={s.profileRole}>{me.region}</Text>}
       </View>
-      {me.role !== "admin" && (section === "identity" || me.identity?.status !== "aprovado") && <IdentityPanel/>}
+      {me.role !== "admin" &&
+        (section === "identity" || me.identity?.status !== "aprovado") && (
+          <IdentityPanel />
+        )}
       {!section && (
         <Card style={s.menu}>
           {navigate && (
@@ -1601,14 +1822,16 @@ function Profile({ navigate }: { navigate?: (tab: string) => void }) {
             expanded={section === "edit"}
             onPress={() => toggle("edit")}
           />
-          <MenuRow
-            icon="star"
-            title="Avaliações recebidas"
-            expanded={navigate ? undefined : section === "reviews"}
-            onPress={() =>
-              navigate ? navigate("Avaliações") : toggle("reviews")
-            }
-          />
+          {(me.role === "admin" || me.identity?.status === "aprovado") && (
+            <MenuRow
+              icon="star"
+              title="Avaliações recebidas"
+              expanded={navigate ? undefined : section === "reviews"}
+              onPress={() =>
+                navigate ? navigate("Avaliações") : toggle("reviews")
+              }
+            />
+          )}
           {navigate && (
             <MenuRow
               icon="bell"
@@ -1624,7 +1847,14 @@ function Profile({ navigate }: { navigate?: (tab: string) => void }) {
               onPress={() => toggle("credential")}
             />
           )}
-          {me.role !== "admin" && <MenuRow icon="shield" title="Foto e verificação de identidade" expanded={section === "identity"} onPress={()=>toggle("identity")}/>}
+          {me.role !== "admin" && (
+            <MenuRow
+              icon="shield"
+              title="Foto e verificação de identidade"
+              expanded={section === "identity"}
+              onPress={() => toggle("identity")}
+            />
+          )}
           <MenuRow
             icon="help"
             title="Ajuda e suporte"
@@ -1803,8 +2033,33 @@ function Admin({ tab }: { tab: string }) {
           <Text>Ocorrências</Text>
         </Card>
       </View>
-      <Heading title="Verificações de identidade" sub="Comparação visual manual. Somente documentos fictícios; sem biometria ou serviço oficial."/>
-      {Object.values(state!.users).filter(u=>u.identity?.status === "pendente").map(u=><IdentityAdmin key={u.id} profile={u}/>)}
+      <Heading
+        title="Verificações de identidade"
+        sub="Comparação visual manual. Somente documentos fictícios; sem biometria ou serviço oficial."
+      />
+      {Object.values(state!.bookings)
+        .filter(
+          (b) =>
+            ["solicitado", "aguardando_pagamento", "confirmado"].includes(
+              b.status,
+            ) &&
+            end(b) > state!.now &&
+            (!state!.users[b.student]?.photoPath ||
+              !state!.users[b.instructor]?.photoPath),
+        )
+        .map((b) => (
+          <Card key={b.id}>
+            <Text style={s.error}>
+              Reserva com foto ausente: {b.id}. Regularize os perfis; nenhuma
+              aula foi cancelada automaticamente.
+            </Text>
+          </Card>
+        ))}
+      {Object.values(state!.users)
+        .filter((u) => u.identity?.documentPath)
+        .map((u) => (
+          <IdentityAdmin key={u.id} profile={u} />
+        ))}
       <Heading
         title="Credenciamento de instrutores"
         sub="Confira autorização e validade. Esta análise não representa uma consulta automática ao Detran."

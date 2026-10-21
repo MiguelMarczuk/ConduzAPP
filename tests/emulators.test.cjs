@@ -16,7 +16,7 @@ const {
 } = require("@firebase/rules-unit-testing");
 const { doc, getDoc, setDoc } = require("firebase/firestore");
 const { ref, uploadBytes, getBytes, listAll } = require("firebase/storage");
-const {deleteObject} = require("firebase/storage");
+const { deleteObject } = require("firebase/storage");
 const { empty, HOUR, DAY } = require("../functions/domain");
 initializeApp({ projectId: "demo-conduzapp" });
 const db = require("../functions/emulator-db").configureEmulatorFirestore(
@@ -70,7 +70,25 @@ async function call(role, op, input = {}) {
         "Content-Type": "application/json",
         ...(role ? { Authorization: `Bearer ${users[role].token}` } : {}),
       },
-      body: JSON.stringify({ data: { op, input:op === "book"?{address:{cep:"",street:"Rua Fictícia",number:"s/n",neighborhood:"Centro",city:"Niterói",uf:"RJ"},...input}:input } }),
+      body: JSON.stringify({
+        data: {
+          op,
+          input:
+            op === "book"
+              ? {
+                  address: {
+                    cep: "",
+                    street: "Rua Fictícia",
+                    number: "s/n",
+                    neighborhood: "Centro",
+                    city: "Niterói",
+                    uf: "RJ",
+                  },
+                  ...input,
+                }
+              : input,
+        },
+      }),
     },
   );
   const body = await r.json();
@@ -91,7 +109,9 @@ before(async () => {
       id: u.uid,
       name: `Teste ${role}`,
       role: role === "outro" ? "aluno" : role,
-      favorites: [], photoPath:"fixture/photo", identity:{status:"aprovado"},
+      favorites: [],
+      photoPath: "fixture/photo",
+      identity: { status: "aprovado" },
     };
   Object.assign(baseline.users[users.instrutor.uid], {
     approval: "aprovado",
@@ -141,78 +161,271 @@ test("Function recusa acesso anônimo e elevação de privilégio", async () => 
   assert.match(r.error.message, /administração/);
 });
 
-test("foto e documento: upload, persistência, análise e isolamento real no Storage",async()=>{
- const uid=users.aluno.uid;
- const owner=env.authenticatedContext(uid,{stateScope:scope}).storage('gs://demo-conduzapp.appspot.com');
- const outsider=env.authenticatedContext(users.outro.uid,{stateScope:scope}).storage('gs://demo-conduzapp.appspot.com');
- const administrator=env.authenticatedContext(users.admin.uid,{stateScope:scope,admin:true}).storage('gs://demo-conduzapp.appspot.com');
- const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1cAAAAASUVORK5CYII=','base64');
- const photo=`profilePhotos/${scope}/${uid}/profile.png`, document=`identityDocuments/${scope}/${uid}/document.png`;
- await assertFails(uploadBytes(ref(outsider,photo),png,{contentType:'image/png'}));
- await assertSucceeds(uploadBytes(ref(owner,photo),png,{contentType:'image/png'}));
- assert.ok((await call('aluno','setPhoto',{path:photo})).result);
- assert.equal((await call('aluno','state')).result.me.photoPath,photo);
- await assertFails(deleteObject(ref(owner,photo)));
- await assertFails(uploadBytes(ref(owner,photo),Buffer.concat([png,Buffer.from('changed')]),{contentType:'image/png'}));
- await assertSucceeds(uploadBytes(ref(owner,document),png,{contentType:'image/png'}));
- assert.ok((await call('aluno','submitIdentity',{path:document})).result);
- assert.ok((await call('aluno','book',{instructor:users.instrutor.uid,start})).error);
- await assertFails(getBytes(ref(outsider,document)));
- await assertFails(getBytes(ref(env.unauthenticatedContext().storage('gs://demo-conduzapp.appspot.com'),document)));
- await assertFails(getBytes(ref(env.authenticatedContext(uid,{stateScope:'test-foreign'}).storage('gs://demo-conduzapp.appspot.com'),document)));
- await assertSucceeds(getBytes(ref(administrator,document)));
- assert.equal((await call('outro','state')).result.users[uid],undefined);
- let r=await call('admin','reviewIdentity',{user:uid,decision:'aprovado',reason:'Análise manual fictícia',documentPath:document,photoPath:photo});
- assert.ok(r.result,JSON.stringify(r));
- r=await call('aluno','state');assert.equal(r.result.me.identity.status,'aprovado');
- assert.ok(Object.values(r.result.notifications).some(n=>n.event==='identity'));
- assert.ok((await call('aluno','setPhoto',{path:`profilePhotos/${scope}/${users.outro.uid}/other.png`})).error);
+test("foto e documento: upload, persistência, análise e isolamento real no Storage", async () => {
+  const uid = users.aluno.uid;
+  const owner = env
+    .authenticatedContext(uid, { stateScope: scope })
+    .storage("gs://demo-conduzapp.appspot.com");
+  const outsider = env
+    .authenticatedContext(users.outro.uid, { stateScope: scope })
+    .storage("gs://demo-conduzapp.appspot.com");
+  const administrator = env
+    .authenticatedContext(users.admin.uid, { stateScope: scope, admin: true })
+    .storage("gs://demo-conduzapp.appspot.com");
+  const png = fs.readFileSync("assets/demo/perfil-ficticio.png");
+  const photo = `profilePhotos/${scope}/${uid}/profile.png`,
+    document = `identityDocuments/${scope}/${uid}/document.png`;
+  await assertFails(
+    uploadBytes(ref(outsider, photo), png, { contentType: "image/png" }),
+  );
+  await assertSucceeds(
+    uploadBytes(ref(owner, photo), png, { contentType: "image/png" }),
+  );
+  assert.ok((await call("aluno", "setPhoto", { path: photo })).result);
+  assert.equal((await call("aluno", "state")).result.me.photoPath, photo);
+  await assertFails(deleteObject(ref(owner, photo)));
+  await assertFails(
+    uploadBytes(
+      ref(owner, photo),
+      Buffer.concat([png, Buffer.from("changed")]),
+      { contentType: "image/png" },
+    ),
+  );
+  await assertSucceeds(
+    uploadBytes(ref(owner, document), png, { contentType: "image/png" }),
+  );
+  assert.ok((await call("aluno", "submitIdentity", { path: document })).result);
+  assert.ok(
+    (await call("aluno", "book", { instructor: users.instrutor.uid, start }))
+      .error,
+  );
+  await assertFails(getBytes(ref(outsider, document)));
+  await assertFails(
+    getBytes(
+      ref(
+        env.unauthenticatedContext().storage("gs://demo-conduzapp.appspot.com"),
+        document,
+      ),
+    ),
+  );
+  await assertFails(
+    getBytes(
+      ref(
+        env
+          .authenticatedContext(uid, { stateScope: "test-foreign" })
+          .storage("gs://demo-conduzapp.appspot.com"),
+        document,
+      ),
+    ),
+  );
+  await assertSucceeds(getBytes(ref(administrator, document)));
+  assert.equal((await call("outro", "state")).result.users[uid], undefined);
+  let r = await call("admin", "reviewIdentity", {
+    user: uid,
+    decision: "aprovado",
+    reason: "Análise manual fictícia",
+    documentPath: document,
+    photoPath: photo,
+  });
+  assert.ok(r.result, JSON.stringify(r));
+  r = await call("aluno", "state");
+  assert.equal(r.result.me.identity.status, "aprovado");
+  assert.ok(
+    Object.values(r.result.notifications).some((n) => n.event === "identity"),
+  );
+  assert.ok(
+    (
+      await call("aluno", "setPhoto", {
+        path: `profilePhotos/${scope}/${users.outro.uid}/other.png`,
+      })
+    ).error,
+  );
 });
-test("backend recusa bytes falsos mesmo que MIME declare imagem",async()=>{
- const path=`profilePhotos/${scope}/${users.aluno.uid}/invalid.png`;
- await uploadBytes(ref(env.authenticatedContext(users.aluno.uid,{stateScope:scope}).storage('gs://demo-conduzapp.appspot.com'),path),Buffer.from('não é PNG'),{contentType:'image/png'});
- const r=await call('aluno','setPhoto',{path});assert.ok(r.error);assert.match(r.error.message,/Arquivo inválido/);
+test("backend recusa bytes falsos mesmo que MIME declare imagem", async () => {
+  const path = `profilePhotos/${scope}/${users.aluno.uid}/invalid.png`;
+  await uploadBytes(
+    ref(
+      env
+        .authenticatedContext(users.aluno.uid, { stateScope: scope })
+        .storage("gs://demo-conduzapp.appspot.com"),
+      path,
+    ),
+    Buffer.from("não é PNG"),
+    { contentType: "image/png" },
+  );
+  const r = await call("aluno", "setPhoto", { path });
+  assert.ok(r.error);
+  assert.match(r.error.message, /Arquivo inválido/);
 });
-test("mensagens não lidas e endereço estruturado persistem com autorização",async()=>{
- await call('aluno','message',{to:users.instrutor.uid,text:'Conversa fictícia',requestId:'new-unread-01'});
- let r=await call('instrutor','state');assert.equal(r.result.unreadCount,1);const message=r.result.messages[0];
- assert.ok((await call('outro','readMessages',{to:users.aluno.uid,messages:[message.id]})).error);
- r=await call('instrutor','readMessages',{to:users.aluno.uid,messages:[message.id]});assert.equal(r.result.unreadCount,0);
- assert.equal((await call('instrutor','state')).result.unreadCount,0);
- r=await call('aluno','book',{instructor:users.instrutor.uid,start});const b=Object.values(r.result.bookings)[0];assert.equal(b.address.number,'s/n');assert.match(b.location,/Rua Fictícia/);
- assert.ok((await call('aluno','book',{instructor:users.instrutor.uid,start:start+HOUR,address:{street:''}})).error);
+test("instrutor também publica foto própria sem poder publicar arquivo de outra pessoa", async () => {
+  const path = `profilePhotos/${scope}/${users.instrutor.uid}/teacher.png`,
+    data = fs.readFileSync("assets/demo/perfil-ficticio.png");
+  await uploadBytes(
+    ref(
+      env
+        .authenticatedContext(users.instrutor.uid, { stateScope: scope })
+        .storage("gs://demo-conduzapp.appspot.com"),
+      path,
+    ),
+    data,
+    { contentType: "image/png" },
+  );
+  const r = await call("instrutor", "setPhoto", { path });
+  assert.ok(r.result, JSON.stringify(r));
+  assert.equal(r.result.me.photoPath, path);
+  assert.ok((await call("aluno", "setPhoto", { path })).error);
 });
-test("grupo de duas aulas é transacional contra solicitação concorrente no segundo horário",async()=>{
- const groupStart=Date.parse(new Date(now+DAY-3*HOUR).toISOString().slice(0,10)+'T09:00:00-03:00');
- const result=await Promise.all([call('aluno','book',{instructor:users.instrutor.uid,start:groupStart,lessonCount:2}),call('outro','book',{instructor:users.instrutor.uid,start:groupStart+HOUR})]);
- assert.equal(result.filter(r=>r.result).length,1);
- const state=(await stateRef.get()).data(),bookings=Object.values(state.bookings);
- const group=bookings.filter(b=>b.student===users.aluno.uid);assert.ok(group.length===0||group.length===2);if(group.length){assert.equal(group[1].start-group[0].start,HOUR);assert.equal(group.reduce((n,b)=>n+b.price,0),17000);}
+test("mensagens não lidas e endereço estruturado persistem com autorização", async () => {
+  await call("aluno", "message", {
+    to: users.instrutor.uid,
+    text: "Conversa fictícia",
+    requestId: "new-unread-01",
+  });
+  let r = await call("instrutor", "state");
+  assert.equal(r.result.unreadCount, 1);
+  const message = r.result.messages[0];
+  assert.ok(
+    (
+      await call("outro", "readMessages", {
+        to: users.aluno.uid,
+        messages: [message.id],
+      })
+    ).error,
+  );
+  r = await call("instrutor", "readMessages", {
+    to: users.aluno.uid,
+    messages: [message.id],
+  });
+  assert.equal(r.result.unreadCount, 0);
+  assert.equal((await call("instrutor", "state")).result.unreadCount, 0);
+  r = await call("aluno", "book", { instructor: users.instrutor.uid, start });
+  const b = Object.values(r.result.bookings)[0];
+  assert.equal(b.address.number, "s/n");
+  assert.match(b.location, /Rua Fictícia/);
+  assert.ok(
+    (
+      await call("aluno", "book", {
+        instructor: users.instrutor.uid,
+        start: start + HOUR,
+        address: { street: "" },
+      })
+    ).error,
+  );
 });
-test("duas aulas: aceite e pagamento simulado conjunto preservam acompanhamento individual",async()=>{
- const groupStart=Date.parse(new Date(now+DAY-3*HOUR).toISOString().slice(0,10)+'T09:00:00-03:00');
- let r=await call('aluno','book',{instructor:users.instrutor.uid,start:groupStart,lessonCount:2});assert.ok(r.result,JSON.stringify(r));const lessons=Object.values(r.result.bookings);
- for(const b of lessons)assert.ok((await call('instrutor','accept',{booking:b.id})).result);
- r=await call('aluno','pay',{booking:lessons[0].id});assert.ok(Object.values(r.result.bookings).every(b=>b.paid&&b.duration===60));
- r=await call('aluno','cancel',{booking:lessons[0].id});assert.equal(r.result.bookings[lessons[0].id].refund,8500);assert.equal(r.result.bookings[lessons[1].id].status,'confirmado');
+test("grupo de duas aulas é transacional contra solicitação concorrente no segundo horário", async () => {
+  const groupStart = Date.parse(
+    new Date(now + DAY - 3 * HOUR).toISOString().slice(0, 10) +
+      "T09:00:00-03:00",
+  );
+  const result = await Promise.all([
+    call("aluno", "book", {
+      instructor: users.instrutor.uid,
+      start: groupStart,
+      lessonCount: 2,
+    }),
+    call("outro", "book", {
+      instructor: users.instrutor.uid,
+      start: groupStart + HOUR,
+    }),
+  ]);
+  assert.equal(result.filter((r) => r.result).length, 1);
+  const state = (await stateRef.get()).data(),
+    bookings = Object.values(state.bookings);
+  const group = bookings.filter((b) => b.student === users.aluno.uid);
+  assert.ok(group.length === 0 || group.length === 2);
+  if (group.length) {
+    assert.equal(group[1].start - group[0].start, HOUR);
+    assert.equal(
+      group.reduce((n, b) => n + b.price, 0),
+      17000,
+    );
+  }
 });
-test("código de início é privado e tentativas inválidas persistem na transação",async()=>{
- let r=await call('aluno','book',{instructor:users.instrutor.uid,start});const id=Object.keys(r.result.bookings)[0];await call('instrutor','accept',{booking:id});await call('aluno','pay',{booking:id});
- const s=(await stateRef.get()).data();s.bookings[id].start=Date.now()-60000;await stateRef.set(s);
- r=await call('aluno','state');const code=r.result.bookings[id].startConfirmation.code;assert.ok(/^\d{8}$/.test(code));
- for(const role of ['instrutor','admin']){const c=(await call(role,'state')).result.bookings[id].startConfirmation;assert.ok(!c.code&&!c.hash&&!c.secret&&!c.salt);}
- assert.ok((await call('outro','confirmStart',{booking:id,code})).error);
- r=await call('instrutor','confirmStart',{booking:id,code:'00000000'});assert.ok(r.result.operationError);assert.equal((await stateRef.get()).data().bookings[id].startConfirmation.attempts,1);
- r=await call('instrutor','confirmStart',{booking:id,code});assert.equal(r.result.bookings[id].startConfirmation.status,'confirmado');
- r=await call('instrutor','confirmStart',{booking:id,code});assert.equal(r.result.bookings[id].startConfirmation.status,'confirmado');
- assert.ok((await call('aluno','setDemoClock',{booking:id,stage:'start'})).error);
- assert.ok((await call('admin','setDemoClock',{booking:id,stage:'start'})).error);
+test("duas aulas: aceite e pagamento simulado conjunto preservam acompanhamento individual", async () => {
+  const groupStart = Date.parse(
+    new Date(now + DAY - 3 * HOUR).toISOString().slice(0, 10) +
+      "T09:00:00-03:00",
+  );
+  let r = await call("aluno", "book", {
+    instructor: users.instrutor.uid,
+    start: groupStart,
+    lessonCount: 2,
+  });
+  assert.ok(r.result, JSON.stringify(r));
+  const lessons = Object.values(r.result.bookings);
+  for (const b of lessons)
+    assert.ok((await call("instrutor", "accept", { booking: b.id })).result);
+  r = await call("aluno", "pay", { booking: lessons[0].id });
+  assert.ok(
+    Object.values(r.result.bookings).every((b) => b.paid && b.duration === 60),
+  );
+  r = await call("aluno", "cancel", { booking: lessons[0].id });
+  assert.equal(r.result.bookings[lessons[0].id].refund, 8500);
+  assert.equal(r.result.bookings[lessons[1].id].status, "confirmado");
 });
-test("código expirado não muda pagamento, falta ou cancelamento e bloqueia elegibilidade",async()=>{
- let r=await call('aluno','book',{instructor:users.instrutor.uid,start});const id=Object.keys(r.result.bookings)[0];await call('instrutor','accept',{booking:id});await call('aluno','pay',{booking:id});
- const s=(await stateRef.get()).data();s.bookings[id].start=Date.now()-11*60000;await stateRef.set(s);
- r=await call('aluno','state');const b=r.result.bookings[id];assert.equal(b.startConfirmation.status,'expirado');assert.equal(b.status,'confirmado');assert.equal(b.paid,true);assert.equal(b.refund,undefined);assert.ok(!b.payoutEligible);
- assert.ok((await call('instrutor','confirmStart',{booking:id,code:'00000000'})).error);
+test("código de início é privado e tentativas inválidas persistem na transação", async () => {
+  let r = await call("aluno", "book", {
+    instructor: users.instrutor.uid,
+    start,
+  });
+  const id = Object.keys(r.result.bookings)[0];
+  await call("instrutor", "accept", { booking: id });
+  await call("aluno", "pay", { booking: id });
+  const s = (await stateRef.get()).data();
+  s.bookings[id].start = Date.now() - 60000;
+  await stateRef.set(s);
+  r = await call("aluno", "state");
+  const code = r.result.bookings[id].startConfirmation.code;
+  assert.ok(/^\d{8}$/.test(code));
+  for (const role of ["instrutor", "admin"]) {
+    const c = (await call(role, "state")).result.bookings[id].startConfirmation;
+    assert.ok(!c.code && !c.hash && !c.secret && !c.salt);
+  }
+  assert.ok((await call("outro", "confirmStart", { booking: id, code })).error);
+  r = await call("instrutor", "confirmStart", {
+    booking: id,
+    code: "00000000",
+  });
+  assert.ok(r.result.operationError);
+  assert.equal(
+    (await stateRef.get()).data().bookings[id].startConfirmation.attempts,
+    1,
+  );
+  r = await call("instrutor", "confirmStart", { booking: id, code });
+  assert.equal(r.result.bookings[id].startConfirmation.status, "confirmado");
+  r = await call("instrutor", "confirmStart", { booking: id, code });
+  assert.equal(r.result.bookings[id].startConfirmation.status, "confirmado");
+  assert.ok(
+    (await call("aluno", "setDemoClock", { booking: id, stage: "start" }))
+      .error,
+  );
+  assert.ok(
+    (await call("admin", "setDemoClock", { booking: id, stage: "start" }))
+      .error,
+  );
+});
+test("código expirado não muda pagamento, falta ou cancelamento e bloqueia elegibilidade", async () => {
+  let r = await call("aluno", "book", {
+    instructor: users.instrutor.uid,
+    start,
+  });
+  const id = Object.keys(r.result.bookings)[0];
+  await call("instrutor", "accept", { booking: id });
+  await call("aluno", "pay", { booking: id });
+  const s = (await stateRef.get()).data();
+  s.bookings[id].start = Date.now() - 11 * 60000;
+  await stateRef.set(s);
+  r = await call("aluno", "state");
+  const b = r.result.bookings[id];
+  assert.equal(b.startConfirmation.status, "expirado");
+  assert.equal(b.status, "confirmado");
+  assert.equal(b.paid, true);
+  assert.equal(b.refund, undefined);
+  assert.ok(!b.payoutEligible);
+  assert.ok(
+    (await call("instrutor", "confirmStart", { booking: id, code: "00000000" }))
+      .error,
+  );
 });
 test("duas reservas concorrentes: exatamente uma é aceita na transação", async () => {
   const results = await Promise.all(

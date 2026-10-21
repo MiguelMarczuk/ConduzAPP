@@ -53,4 +53,13 @@ Evidências: [chat sem agendamento](chat-sem-agendamento.png), [chat agendado](c
 
 `Preparar-Demonstracao.ps1` foi executado para criar um cenário próprio de ensaio e pode ser repetido perto da banca. O cenário anterior fica preservado. Saia e entre de novo após executar; não altere o relógio. O histórico pago é criado recente, sem avaliações, para permitir conclusão normal.
 
-As seções anteriores deste arquivo descrevem a recuperação original; suas quantidades e estado da base são históricos. O relatório atual e as pendências estão em [AUDITORIA_FINAL_TCC.md](AUDITORIA_FINAL_TCC.md). Permanecem fora da validação nova: aparelhos Android/iOS, teste E2E automatizado e conferência visual de upload/renderização de fotos.
+As seções anteriores deste arquivo descrevem a recuperação original; suas quantidades e estado da base são históricos.
+
+## Implementações urgentes — nova validação
+
+- **52/52 unitários**: domínio, cenários e helpers, incluindo fotos/identidade, mensagens, filtros/busca/CEP, duas aulas e início.
+- **23/23 integrações/autorização**: emuladores reais, Storage, callable, transações/concorrência e regras de acesso.
+- **TypeScript e build web aprovados**, 23 rotas. Verificador padrão inclui a nova suíte de funcionalidades.
+- Ensaio manual web: galeria/prévia/upload, persistência após login, documento privado/decisão administrativa, badge em ambos os perfis, logo por papel, endereço/ViaCEP, duas aulas e pagamento conjunto, código incorreto/correto/expirado, conclusão condicionada ao término e relógio restaurado.
+- Capturas e detalhes em [IMPLEMENTACOES_URGENTES_TCC.md](IMPLEMENTACOES_URGENTES_TCC.md). Navegador conferido em 425px e 320px; sem suíte E2E automatizada e sem teste em aparelhos Android/iOS nesta etapa.
+- Logs finais em `.tools/urgente-final-*` e `.tools/urgente-verificar-final.log`, ignorados pelo Git. Resultados históricos não foram somados aos atuais.

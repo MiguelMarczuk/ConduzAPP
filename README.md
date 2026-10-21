@@ -44,7 +44,7 @@ Com os emuladores ativos:
 powershell -ExecutionPolicy Bypass -File .\scripts\Verificar.ps1
 ```
 
-Os testes de integração usam contas temporárias e um documento isolado por execução; não substituem a base usada pelo aplicativo. A verificação atual inclui 31 testes unitários, 15 integrações/autorização, TypeScript e build web.
+Os testes de integração usam contas temporárias e um documento isolado por execução; não substituem a base usada pelo aplicativo. A verificação atual inclui **52 testes unitários, 23 integrações/autorização, TypeScript e build web**. Resultado das implementações urgentes e limites do ensaio: [relatório](docs/IMPLEMENTACOES_URGENTES_TCC.md).
 
 Com Node 22 e npm no PATH também é possível executar `npm test`, `npm run typecheck`, `npm run test:emulators` e `npm run build:web`.
 
@@ -58,7 +58,7 @@ Com Node 22 e npm no PATH também é possível executar `npm test`, `npm run typ
 - `functions/index.js`: endpoint autenticado, transação Firestore e autorização.
 - `functions/state-scope.js`: cenários de teste/ensaio selecionados por claim do Admin SDK local.
 - `firestore.rules`: impede leitura e escrita direta pelo cliente.
-- `storage.rules`: fotos de contestação privadas para participantes e administração.
+- `storage.rules`: fotos de perfil por ambiente, documentos de identidade privados e evidências de contestação com acesso autorizado.
 
 O backend usa um documento agregado privado e transações para serializar as mutações desta demonstração pequena. Há limites de quantidade/tamanho. Esta estrutura prioriza recuperação e verificabilidade local; exige migração para coleções particionadas antes de escalar para produção. Os campos de acesso às fotos são espelhados pelo servidor. Não há migração de dados reais ou leitura do Firebase antigo.
 
@@ -70,7 +70,7 @@ Nenhum deploy, push, transferência financeira, cobrança real ou integração a
 
 Chat antes da reserva, tags calculadas no backend e notificações internas usam o serviço agregado existente. Mensagens têm chave de reenvio para evitar duplicação. Atualizações entre participantes seguem o polling de 10 segundos, com botão Atualizar.
 
-Protótipos visuais originais ainda não foram fornecidos; a identidade azul e branca foi preservada com componentes existentes.
+A identidade azul e branca aprovada foi preservada com componentes existentes, inclusive nas funcionalidades urgentes. Validação nativa em aparelhos Android/iOS continua prevista para etapa separada.
 
 Veja [roteiro da apresentação](docs/DEMONSTRACAO.md) e [registro da recuperação](RECUPERACAO.md).
 

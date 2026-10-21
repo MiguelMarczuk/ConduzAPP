@@ -10,14 +10,15 @@ if (
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { randomUUID } = require("node:crypto");
 const { execute, empty } = require("./domain");
-const { statePath,effectiveNow } = require("./state-scope");
+const { statePath, effectiveNow } = require("./state-scope");
 let database;
 function getDatabase() {
   if (!database) {
     const { initializeApp, getApps } = require("firebase-admin/app");
     const { getFirestore } = require("firebase-admin/firestore");
     if (!getApps().length) initializeApp({ projectId: "demo-conduzapp" });
-    database = require("./emulator-db").configureEmulatorFirestore(getFirestore());
+    database =
+      require("./emulator-db").configureEmulatorFirestore(getFirestore());
   }
   return database;
 }
@@ -32,24 +33,36 @@ exports.conduz = onCall({ cors: true, timeoutSeconds: 60 }, async (request) => {
   const id = randomUUID();
   const db = getDatabase();
   try {
-    const scope = statePath(request.auth.token).split('/')[1];
+    const scope = statePath(request.auth.token).split("/")[1];
     const trusted = {};
-    if (["setPhoto","submitIdentity"].includes(op)) {
-      const {getStorage} = require("firebase-admin/storage");
-      trusted.media = await require("./media").validateMedia(getStorage().bucket("demo-conduzapp.appspot.com"), actor.uid, scope, op, input?.path);
+    if (["setPhoto", "submitIdentity"].includes(op)) {
+      const { getStorage } = require("firebase-admin/storage");
+      trusted.media = await require("./media").validateMedia(
+        getStorage().bucket("demo-conduzapp.appspot.com"),
+        actor.uid,
+        scope,
+        op,
+        input?.path,
+      );
     }
     return await db.runTransaction(async (tx) => {
       const ref = db.doc(statePath(request.auth.token));
       const snap = await tx.get(ref);
-      const state=snap.data()||empty(),realNow=Date.now();
+      const state = snap.data() || empty(),
+        realNow = Date.now();
       const result = execute(
         state,
         actor,
         op,
         input,
-        effectiveNow(state,request.auth.token,realNow),
+        effectiveNow(state, request.auth.token, realNow),
         id,
-        {...trusted,realNow,emulator:process.env.FUNCTIONS_EMULATOR === "true",demoScope:scope},
+        {
+          ...trusted,
+          realNow,
+          emulator: process.env.FUNCTIONS_EMULATOR === "true",
+          demoScope: scope,
+        },
       );
       if (result.write) {
         tx.set(ref, result.state);

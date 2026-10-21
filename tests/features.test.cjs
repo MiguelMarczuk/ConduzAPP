@@ -1,39 +1,712 @@
-const {test}=require('node:test'),assert=require('node:assert/strict');
-const {execute,empty,HOUR,DAY}=require('../functions/domain');
-const {validImage}=require('../functions/media');
-const fs=require('node:fs'),Module=require('node:module'),ts=require('typescript');
-const uxModule=new Module(__filename);uxModule._compile(ts.transpileModule(fs.readFileSync('src/lib/presentation.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,__filename);
-const ux=uxModule.exports;
-const now=Date.parse('2026-10-20T09:00:00-03:00'),student={uid:'s'},teacher={uid:'t'},admin={uid:'a',admin:true};
-function fixture(){const s=empty();for(const [id,role]of [['s','aluno'],['t','instrutor'],['o','aluno'],['a','admin']])s.users[id]={id,role,name:'Ficticio '+id,photoPath:'photo/'+id,identity:{status:'aprovado'},favorites:[]};Object.assign(s.users.t,{approval:'aprovado',credential:'DEMO',credentialExpires:now+30*DAY,price:8500,periods:Array.from({length:7},(_,day)=>({day,from:8,to:20})),blocks:[]});return s;}
-const act=(s,a,op,input={},time=now,id='operation',trusted={})=>execute(s,a,op,op==="book"?{address:{cep:"",street:"Rua Fictícia",number:"s/n",neighborhood:"Centro",city:"Niterói",uf:"RJ"},...input}:input,time,id,trusted).state;
-function booked(){return act(fixture(),student,'book',{instructor:'t',start:now+DAY});}
-function paid(){return act(act(booked(),teacher,'accept',{booking:'operation'}),student,'pay',{booking:'operation'});}
-test('foto exige recibo de imagem validado pelo servidor e persiste na projeção',()=>{let s=fixture();assert.throws(()=>act(s,student,'setPhoto',{path:'injetada'}),/validada/);s=act(s,student,'setPhoto',{path:'nova'},now,'p',{media:{path:'nova',kind:'profilePhotos'}});assert.equal(execute(s,student,'state').result.me.photoPath,'nova');assert.equal(execute(s,teacher,'state').result.users.s,undefined);});
-test('foto não pode ser removida com reserva ativa; substituição é atômica',()=>{const s=booked();assert.throws(()=>act(s,student,'removePhoto'),/aulas ativas/);const n=act(s,student,'setPhoto',{path:'nova'},now,'p',{media:{path:'nova',kind:'profilePhotos'}});assert.equal(n.users.s.photoPath,'nova');assert.equal(s.users.s.photoPath,'photo/s');});
-test('pagamento só confirma com as duas fotos; ausência antiga não cancela a reserva',()=>{let s=act(booked(),teacher,'accept',{booking:'operation'});s.users.s.photoPath=null;assert.throws(()=>act(s,student,'pay',{booking:'operation'}),/foto de perfil/);assert.equal(s.bookings.operation.status,'aguardando_pagamento');});
-test('documentação privada, decisão manual auditada e notificação; identidade não substitui credenciamento',()=>{let s=fixture();s.users.s.identity={status:'nao_enviada'};assert.throws(()=>act(s,student,'book',{instructor:'t',start:now+DAY}),/aguardando análise/);s=act(s,student,'submitIdentity',{path:'doc'},now,'doc',{media:{path:'doc',kind:'identityDocuments'}});assert.equal(s.users.s.identity.status,'pendente');assert.throws(()=>act(s,teacher,'reviewIdentity',{user:'s'}),/administração/);assert.equal(execute(s,teacher,'state').result.users.s,undefined);s=act(s,admin,'reviewIdentity',{user:'s',decision:'rejeitado',reason:'Imagem fictícia ilegível',documentPath:'doc',photoPath:'photo/s'});assert.equal(s.identityAudit[0].reviewedBy,'a');assert.equal(Object.values(execute(s,student,'state').result.notifications).length,1);s=act(s,student,'submitIdentity',{path:'doc2'},now,'d2',{media:{path:'doc2',kind:'identityDocuments'}});s=act(s,admin,'reviewIdentity',{user:'s',decision:'aprovado',reason:'Análise manual fictícia',documentPath:'doc2',photoPath:'photo/s'});assert.equal(s.users.s.identity.status,'aprovado');s.users.t.approval='pendente';assert.throws(()=>act(s,student,'book',{instructor:'t',start:now+DAY}),/aprovação/);});
-test('bytes de imagem e MIME são conferidos; SVG e arquivo disfarçado recusados',()=>{assert.equal(validImage(Buffer.from('segredo'),'image/png'),false);assert.equal(validImage(Buffer.from('<svg/>'),'image/svg+xml'),false);assert.equal(validImage(Buffer.from([137,80,78,71,13,10,26,10]),'image/png'),true);});
-test('erros de login não enumeram contas e não exibem detalhes Firebase',()=>{assert.equal(ux.authMessage({code:'auth/user-not-found'}),ux.authMessage({code:'auth/wrong-password'}));assert.match(ux.authMessage({code:'auth/email-already-in-use'},true),/Já existe/);assert.match(ux.authMessage({code:'auth/network-request-failed'}),/internet/);assert.match(ux.authFields('',''),/Preencha/);assert.match(ux.authFields('invalido','abc'),/válido/);assert.match(ux.authFields('novo@exemplo.com','123',true,'Nome'),/segurança/);assert.ok(!ux.authMessage({message:'Firebase: token secreto'}).includes('Firebase'));});
-module.exports={fixture,act,paid,booked,now,student,teacher,admin,ux};
-test('código nasce no horário do servidor e só o aluno recebe o segredo',()=>{let s=paid(),time=now+DAY;assert.equal(execute(s,student,'state',{},time-1).result.bookings.operation.startConfirmation,undefined);let r=execute(s,student,'state',{},time);const c=r.result.bookings.operation.startConfirmation;assert.ok(/^\d{8}$/.test(c.code));assert.equal(r.write,true);s=r.state;for(const a of [teacher,admin]){const view=execute(s,a,'state',{},time).result.bookings.operation.startConfirmation;assert.ok(!view.code&&!view.hash&&!view.salt&&!view.secret);}assert.deepEqual(execute(s,{uid:'o'},'state',{},time).result.bookings,{});assert.equal(execute(s,student,'state',{},time+1).write,false);assert.equal(Object.values(s.notifications).filter(n=>n.event==='start').length,2);});
-test('início correto inclusive no décimo minuto; confirmação é idempotente e não conclui aula',()=>{let s=paid(),time=now+DAY;const r=execute(s,student,'state',{},time);s=r.state;const code=r.result.bookings.operation.startConfirmation.code;assert.throws(()=>act(s,student,'confirmStart',{booking:'operation',code},time),/Instrutor/);assert.throws(()=>act(s,{uid:'o'},'confirmStart',{booking:'operation',code},time),/participa/);s=act(s,teacher,'confirmStart',{booking:'operation',code},time+10*60000);assert.equal(s.bookings.operation.startConfirmation.status,'confirmado');assert.equal(s.bookings.operation.status,'confirmado');const n=s.audit.length;assert.equal(execute(s,teacher,'confirmStart',{booking:'operation',code},time+10*60000).write,false);assert.equal(s.audit.length,n);assert.throws(()=>act(s,teacher,'complete',{booking:'operation'},time+10*60000),/término/);s=act(s,teacher,'complete',{booking:'operation'},time+HOUR);s=act(s,teacher,'eligibility',{booking:'operation'},time+26*HOUR);assert.equal(s.bookings.operation.payoutEligible,true);});
-test('tentativas inválidas persistem até bloqueio sem alteração financeira',()=>{let s=paid(),time=now+DAY;for(let i=0;i<5;i++){const r=execute(s,teacher,'confirmStart',{booking:'operation',code:'00000000'},time);assert.match(r.result.operationError,/incorreto|Limite/);s=r.state;}assert.equal(s.bookings.operation.startConfirmation.attempts,5);assert.equal(s.bookings.operation.startConfirmation.status,'bloqueado');assert.throws(()=>act(s,teacher,'confirmStart',{booking:'operation',code:'00000000'},time),/Limite/);assert.equal(s.bookings.operation.price,8500);assert.equal(s.bookings.operation.paid,true);assert.equal(s.bookings.operation.refund,undefined);});
-test('expiração não marca falta nem cancela; conclusão mantém prazo e repasse fica bloqueado',()=>{const time=now+DAY;let s=paid();s=execute(s,student,'state',{},time+10*60000+1).state;assert.equal(s.bookings.operation.startConfirmation.status,'expirado');assert.equal(s.bookings.operation.status,'confirmado');assert.equal(s.bookings.operation.refund,undefined);assert.throws(()=>act(s,teacher,'confirmStart',{booking:'operation',code:'00000000'},time+11*60000),/dez minutos/);s=act(s,teacher,'complete',{booking:'operation'},time+HOUR);assert.throws(()=>act(s,teacher,'eligibility',{booking:'operation'},time+26*HOUR),/Início não confirmado/);});
-test('códigos são específicos por aula e não se reutilizam entre as duas reservas',()=>{let s=act(fixture(),student,'book',{instructor:'t',start:now+DAY,lessonCount:2},now,'g');for(const b of ['g','g_2'])s=act(s,teacher,'accept',{booking:b});s=act(s,student,'pay',{booking:'g'});let r=execute(s,student,'state',{},now+DAY);s=r.state;const first=r.result.bookings.g.startConfirmation.code;r=execute(s,student,'state',{},now+DAY+HOUR);s=r.state;assert.ok(first!==r.result.bookings.g_2.startConfirmation.code);r=execute(s,teacher,'confirmStart',{booking:'g_2',code:first},now+DAY+HOUR);assert.match(r.result.operationError,/incorreto/);});
-test('relógio controlado exige cenário demo, administrador e emulador; payload comum não controla tempo',()=>{let s=fixture();s.demo={scope:'demo-clock'};const trusted={emulator:true,demoScope:'demo-clock',realNow:now};s=act(s,student,'book',{instructor:'t',start:now+DAY});assert.throws(()=>act(s,student,'setDemoClock',{booking:'operation',stage:'start'},now,'clock',trusted),/administrador/);assert.throws(()=>act(s,admin,'setDemoClock',{booking:'operation',stage:'start'},now,'clock',{...trusted,emulator:false}),/exclusivo/);assert.throws(()=>act(s,admin,'setDemoClock',{booking:'operation',stage:'start'},now,'clock',{...trusted,demoScope:'test-clock'}),/exclusivo/);s=act(s,admin,'setDemoClock',{booking:'operation',stage:'start'},now,'clock',trusted);const {effectiveNow}=require('../functions/state-scope');assert.equal(effectiveNow(s,{stateScope:'demo-clock'},now,true),now+DAY);assert.equal(effectiveNow(s,{stateScope:'demo-clock'},now,false),now);assert.equal(effectiveNow(s,{stateScope:'test-clock'},now,true),now);assert.equal(execute(fixture(),student,'state',{now:now+DAY},now).result.now,now);});
-test('duas aulas consecutivas são duas reservas de 60min com valor congelado e comissão individual',()=>{const s=act(fixture(),student,'book',{instructor:'t',start:now+DAY,lessonCount:2},now,'group');const lessons=Object.values(s.bookings);assert.equal(lessons.length,2);assert.equal(lessons[1].start,lessons[0].start+HOUR);assert.ok(lessons.every(b=>b.duration===60&&b.price===8500&&b.groupId==='group'));assert.equal(lessons.reduce((n,b)=>n+b.price,0),17000);assert.equal(lessons.reduce((n,b)=>n+b.commission,0),510);});
-test('segunda aula indisponível não deixa metade da solicitação gravada; horários separados recusados',()=>{const s=act(fixture(),{uid:'o'},'book',{instructor:'t',start:now+DAY+HOUR},now,'occupied');assert.throws(()=>act(s,student,'book',{instructor:'t',start:now+DAY,lessonCount:2},now,'group'),/reservado/);assert.deepEqual(Object.keys(s.bookings),['occupied']);assert.throws(()=>act(fixture(),student,'book',{instructor:'t',start:now+DAY,lessonCount:2,starts:[now+DAY,now+DAY+2*HOUR]}),/consecutivos/);assert.throws(()=>act(fixture(),student,'book',{instructor:'t',start:now+DAY+14*HOUR,lessonCount:2}),/mesma data/);});
-test('pagamento conjunto exige aceite das duas; cancelamento de cada aula usa política existente',()=>{let s=act(fixture(),student,'book',{instructor:'t',start:now+DAY,lessonCount:2},now,'group');s=act(s,teacher,'accept',{booking:'group'});assert.throws(()=>act(s,student,'pay',{booking:'group'}),/duas aulas/);assert.ok(Object.values(s.bookings).every(b=>!b.paid));s=act(s,teacher,'accept',{booking:'group_2'});s=act(s,student,'pay',{booking:'group'});assert.ok(Object.values(s.bookings).every(b=>b.paid));s=act(s,student,'cancel',{booking:'group'},now+DAY-HOUR);assert.equal(s.bookings.group.refund,4250);assert.equal(s.bookings.group_2.status,'confirmado');assert.equal(s.bookings.group_2.price,8500);});
-test('não lidas contam somente recebidas, leitura autorizada persiste e reenvio não duplica',()=>{
- let s=act(fixture(),student,'message',{to:'t',text:'Mensagem fictícia',requestId:'unread-001'},now,'m1');
- assert.equal(execute(s,teacher,'state').result.unreadCount,1);assert.equal(execute(s,student,'state').result.unreadCount,0);
- s=act(s,student,'message',{to:'t',text:'Mensagem fictícia',requestId:'unread-001'},now,'m2');assert.equal(s.messages.length,1);
- assert.throws(()=>act(s,{uid:'o'},'readMessages',{to:'s',messages:['m1']}),/outro participante/);
- s=act(s,teacher,'readMessages',{to:'s',messages:['m1']});const read=s.messages[0].readAt;
- s=act(s,teacher,'readMessages',{to:'s',messages:['m1']},now+1000);assert.equal(s.messages[0].readAt,read);assert.equal(execute(s,teacher,'state').result.unreadCount,0);
+const { test } = require("node:test"),
+  assert = require("node:assert/strict");
+const { execute, empty, HOUR, DAY } = require("../functions/domain");
+const { validImage, validateMedia } = require("../functions/media");
+test("servidor decodifica a imagem e recusa apenas assinatura PNG ou conteúdo truncado", async () => {
+  const { validateMedia } = require("../functions/media");
+  function bucket(bytes) {
+    return {
+      file: () => ({
+        getMetadata: async () => [
+          { size: bytes.length, contentType: "image/png" },
+        ],
+        download: async () => [bytes],
+      }),
+    };
+  }
+  await assert.rejects(
+    () =>
+      validateMedia(
+        bucket(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])),
+        "u",
+        "test-media",
+        "setPhoto",
+        "profilePhotos/test-media/u/image.png",
+      ),
+    /incompleta/,
+  );
+  const png = require("node:fs").readFileSync(
+    "assets/demo/perfil-ficticio.png",
+  );
+  assert.equal(
+    (
+      await validateMedia(
+        bucket(png),
+        "u",
+        "test-media",
+        "setPhoto",
+        "profilePhotos/test-media/u/image.png",
+      )
+    ).path,
+    "profilePhotos/test-media/u/image.png",
+  );
 });
-test('filtros refletem estados reais e disputa sem inventar status',()=>{assert.ok(ux.matchesBooking({status:'solicitado'},'Pendentes'));assert.ok(!ux.matchesBooking({status:'confirmado'},'Pendentes'));assert.ok(ux.matchesBooking({status:'concluido',disputeOpen:true},'Em disputa'));assert.ok(ux.matchesBooking({status:'falta_aluno'},'Faltas'));assert.equal(ux.homeTab('aluno'),'Início');assert.equal(ux.homeTab('instrutor'),'Início');assert.equal(ux.homeTab('admin'),'Início');assert.equal(ux.homeTab('aluno',true),'Perfil');});
-test('lista completa exclui inaptos; destaque não inventa profissionais',()=>{const users=[{id:'a',role:'instrutor',eligible:true,name:'A',featured:true},{id:'b',role:'instrutor',eligible:true,name:'B'},{id:'c',role:'instrutor',eligible:false,name:'C'},{id:'d',role:'aluno',eligible:true,name:'D'}];assert.deepEqual(ux.instructorList(users,'avulsas','').map(u=>u.id),['a']);assert.deepEqual(ux.instructorList(users,'instrutores','').map(u=>u.id),['a','b']);assert.deepEqual(ux.instructorList(users,'favoritos','',['b']).map(u=>u.id),['b']);assert.deepEqual(ux.instructorList(users,'instrutores','B').map(u=>u.id),['b']);});
-test('endereço estruturado exige campos; CEP opcional e s/n válidos',()=>{const {address,formatAddress}=require('../functions/address');const a={street:'Rua Fictícia',number:'s/n',neighborhood:'Centro',city:'Niterói',uf:'rj'};assert.equal(address(a).cep,'');assert.match(formatAddress(address(a)),/s\/n/);assert.throws(()=>address({...a,street:''}),/rua/);assert.throws(()=>address({...a,cep:'123'}),/oito/);assert.throws(()=>execute(fixture(),student,'book',{instructor:'t',start:now+DAY},now),/rua/);const s=booked();assert.equal(s.bookings.operation.address.number,'s/n');});
-test('ViaCEP preenche dados disponíveis e falhas preservam a alternativa manual',async()=>{const mod=new Module(__filename);mod._compile(ts.transpileModule(fs.readFileSync('src/lib/cep.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,__filename);let url;const found=await mod.exports.lookupCep('24000-000',async u=>{url=u;return {ok:true,json:async()=>({logradouro:'Rua Fictícia',bairro:'Centro',localidade:'Niterói',uf:'RJ'})}});assert.match(url,/24000000\/json/);assert.equal(found.street,'Rua Fictícia');await assert.rejects(()=>mod.exports.lookupCep('123'),/oito/);await assert.rejects(()=>mod.exports.lookupCep('99999999',async()=>({ok:true,json:async()=>({erro:true})})),/manualmente/);await assert.rejects(()=>mod.exports.lookupCep('24000000',async()=>{throw Error('offline')}),/manualmente/);});
+const fs = require("node:fs"),
+  Module = require("node:module"),
+  ts = require("typescript");
+const uxModule = new Module(__filename);
+uxModule._compile(
+  ts.transpileModule(fs.readFileSync("src/lib/presentation.ts", "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS },
+  }).outputText,
+  __filename,
+);
+const ux = uxModule.exports;
+const now = Date.parse("2026-10-20T09:00:00-03:00"),
+  student = { uid: "s" },
+  teacher = { uid: "t" },
+  admin = { uid: "a", admin: true };
+function fixture() {
+  const s = empty();
+  for (const [id, role] of [
+    ["s", "aluno"],
+    ["t", "instrutor"],
+    ["o", "aluno"],
+    ["a", "admin"],
+  ])
+    s.users[id] = {
+      id,
+      role,
+      name: "Ficticio " + id,
+      photoPath: "photo/" + id,
+      identity: { status: "aprovado" },
+      favorites: [],
+    };
+  Object.assign(s.users.t, {
+    approval: "aprovado",
+    credential: "DEMO",
+    credentialExpires: now + 30 * DAY,
+    price: 8500,
+    periods: Array.from({ length: 7 }, (_, day) => ({ day, from: 8, to: 20 })),
+    blocks: [],
+  });
+  return s;
+}
+const act = (
+  s,
+  a,
+  op,
+  input = {},
+  time = now,
+  id = "operation",
+  trusted = {},
+) =>
+  execute(
+    s,
+    a,
+    op,
+    op === "book"
+      ? {
+          address: {
+            cep: "",
+            street: "Rua Fictícia",
+            number: "s/n",
+            neighborhood: "Centro",
+            city: "Niterói",
+            uf: "RJ",
+          },
+          ...input,
+        }
+      : input,
+    time,
+    id,
+    trusted,
+  ).state;
+function booked() {
+  return act(fixture(), student, "book", { instructor: "t", start: now + DAY });
+}
+function paid() {
+  return act(
+    act(booked(), teacher, "accept", { booking: "operation" }),
+    student,
+    "pay",
+    { booking: "operation" },
+  );
+}
+test("foto exige recibo de imagem validado pelo servidor e persiste na projeção", () => {
+  let s = fixture();
+  assert.throws(
+    () => act(s, student, "setPhoto", { path: "injetada" }),
+    /validada/,
+  );
+  s = act(s, student, "setPhoto", { path: "nova" }, now, "p", {
+    media: { path: "nova", kind: "profilePhotos" },
+  });
+  assert.equal(execute(s, student, "state").result.me.photoPath, "nova");
+  assert.equal(execute(s, teacher, "state").result.users.s, undefined);
+});
+test("foto não pode ser removida com reserva ativa; substituição é atômica", () => {
+  const s = booked();
+  assert.throws(() => act(s, student, "removePhoto"), /aulas ativas/);
+  const n = act(s, student, "setPhoto", { path: "nova" }, now, "p", {
+    media: { path: "nova", kind: "profilePhotos" },
+  });
+  assert.equal(n.users.s.photoPath, "nova");
+  assert.equal(s.users.s.photoPath, "photo/s");
+});
+test("pagamento só confirma com as duas fotos; ausência antiga não cancela a reserva", () => {
+  let s = act(booked(), teacher, "accept", { booking: "operation" });
+  s.users.s.photoPath = null;
+  assert.throws(
+    () => act(s, student, "pay", { booking: "operation" }),
+    /foto de perfil/,
+  );
+  assert.equal(s.bookings.operation.status, "aguardando_pagamento");
+});
+test("documentação privada, decisão manual auditada e notificação; identidade não substitui credenciamento", () => {
+  let s = fixture();
+  s.users.s.identity = { status: "nao_enviada" };
+  assert.throws(
+    () => act(s, student, "book", { instructor: "t", start: now + DAY }),
+    /aguardando análise/,
+  );
+  s = act(s, student, "submitIdentity", { path: "doc" }, now, "doc", {
+    media: { path: "doc", kind: "identityDocuments" },
+  });
+  assert.equal(s.users.s.identity.status, "pendente");
+  assert.throws(
+    () => act(s, teacher, "reviewIdentity", { user: "s" }),
+    /administração/,
+  );
+  assert.equal(execute(s, teacher, "state").result.users.s, undefined);
+  s = act(s, admin, "reviewIdentity", {
+    user: "s",
+    decision: "rejeitado",
+    reason: "Imagem fictícia ilegível",
+    documentPath: "doc",
+    photoPath: "photo/s",
+  });
+  assert.equal(s.identityAudit[0].reviewedBy, "a");
+  assert.equal(
+    Object.values(execute(s, student, "state").result.notifications).length,
+    1,
+  );
+  s = act(s, student, "submitIdentity", { path: "doc2" }, now, "d2", {
+    media: { path: "doc2", kind: "identityDocuments" },
+  });
+  s = act(s, admin, "reviewIdentity", {
+    user: "s",
+    decision: "aprovado",
+    reason: "Análise manual fictícia",
+    documentPath: "doc2",
+    photoPath: "photo/s",
+  });
+  assert.equal(s.users.s.identity.status, "aprovado");
+  s.users.t.approval = "pendente";
+  assert.throws(
+    () => act(s, student, "book", { instructor: "t", start: now + DAY }),
+    /aprovação/,
+  );
+});
+test("bytes de imagem e MIME são conferidos; SVG e arquivo disfarçado recusados", () => {
+  assert.equal(validImage(Buffer.from("segredo"), "image/png"), false);
+  assert.equal(validImage(Buffer.from("<svg/>"), "image/svg+xml"), false);
+  assert.equal(
+    validImage(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), "image/png"),
+    true,
+  );
+});
+test("erros de login não enumeram contas e não exibem detalhes Firebase", () => {
+  assert.equal(
+    ux.authMessage({ code: "auth/user-not-found" }),
+    ux.authMessage({ code: "auth/wrong-password" }),
+  );
+  assert.match(
+    ux.authMessage({ code: "auth/email-already-in-use" }, true),
+    /Já existe/,
+  );
+  assert.match(
+    ux.authMessage({ code: "auth/network-request-failed" }),
+    /internet/,
+  );
+  assert.match(ux.authFields("", ""), /Preencha/);
+  assert.match(ux.authFields("invalido", "abc"), /válido/);
+  assert.match(
+    ux.authFields("novo@exemplo.com", "123", true, "Nome"),
+    /segurança/,
+  );
+  assert.ok(
+    !ux
+      .authMessage({ message: "Firebase: token secreto" })
+      .includes("Firebase"),
+  );
+});
+module.exports = {
+  fixture,
+  act,
+  paid,
+  booked,
+  now,
+  student,
+  teacher,
+  admin,
+  ux,
+};
+test("código nasce no horário do servidor e só o aluno recebe o segredo", () => {
+  let s = paid(),
+    time = now + DAY;
+  assert.equal(
+    execute(s, student, "state", {}, time - 1).result.bookings.operation
+      .startConfirmation,
+    undefined,
+  );
+  let r = execute(s, student, "state", {}, time);
+  const c = r.result.bookings.operation.startConfirmation;
+  assert.ok(/^\d{8}$/.test(c.code));
+  assert.equal(r.write, true);
+  s = r.state;
+  for (const a of [teacher, admin]) {
+    const view = execute(s, a, "state", {}, time).result.bookings.operation
+      .startConfirmation;
+    assert.ok(!view.code && !view.hash && !view.salt && !view.secret);
+  }
+  assert.deepEqual(
+    execute(s, { uid: "o" }, "state", {}, time).result.bookings,
+    {},
+  );
+  assert.equal(execute(s, student, "state", {}, time + 1).write, false);
+  assert.equal(
+    Object.values(s.notifications).filter((n) => n.event === "start").length,
+    2,
+  );
+});
+test("início correto inclusive no décimo minuto; confirmação é idempotente e não conclui aula", () => {
+  let s = paid(),
+    time = now + DAY;
+  const r = execute(s, student, "state", {}, time);
+  s = r.state;
+  const code = r.result.bookings.operation.startConfirmation.code;
+  assert.throws(
+    () => act(s, student, "confirmStart", { booking: "operation", code }, time),
+    /Instrutor/,
+  );
+  assert.throws(
+    () =>
+      act(
+        s,
+        { uid: "o" },
+        "confirmStart",
+        { booking: "operation", code },
+        time,
+      ),
+    /participa/,
+  );
+  s = act(
+    s,
+    teacher,
+    "confirmStart",
+    { booking: "operation", code },
+    time + 10 * 60000,
+  );
+  assert.equal(s.bookings.operation.startConfirmation.status, "confirmado");
+  assert.equal(s.bookings.operation.status, "confirmado");
+  const n = s.audit.length;
+  assert.equal(
+    execute(
+      s,
+      teacher,
+      "confirmStart",
+      { booking: "operation", code },
+      time + 10 * 60000,
+    ).write,
+    false,
+  );
+  assert.equal(s.audit.length, n);
+  assert.throws(
+    () =>
+      act(s, teacher, "complete", { booking: "operation" }, time + 10 * 60000),
+    /término/,
+  );
+  s = act(s, teacher, "complete", { booking: "operation" }, time + HOUR);
+  s = act(
+    s,
+    teacher,
+    "eligibility",
+    { booking: "operation" },
+    time + 26 * HOUR,
+  );
+  assert.equal(s.bookings.operation.payoutEligible, true);
+});
+test("tentativas inválidas persistem até bloqueio sem alteração financeira", () => {
+  let s = paid(),
+    time = now + DAY;
+  for (let i = 0; i < 5; i++) {
+    const r = execute(
+      s,
+      teacher,
+      "confirmStart",
+      { booking: "operation", code: "00000000" },
+      time,
+    );
+    assert.match(r.result.operationError, /incorreto|Limite/);
+    s = r.state;
+  }
+  assert.equal(s.bookings.operation.startConfirmation.attempts, 5);
+  assert.equal(s.bookings.operation.startConfirmation.status, "bloqueado");
+  assert.throws(
+    () =>
+      act(
+        s,
+        teacher,
+        "confirmStart",
+        { booking: "operation", code: "00000000" },
+        time,
+      ),
+    /Limite/,
+  );
+  assert.equal(s.bookings.operation.price, 8500);
+  assert.equal(s.bookings.operation.paid, true);
+  assert.equal(s.bookings.operation.refund, undefined);
+});
+test("expiração não marca falta nem cancela; conclusão mantém prazo e repasse fica bloqueado", () => {
+  const time = now + DAY;
+  let s = paid();
+  s = execute(s, student, "state", {}, time + 10 * 60000 + 1).state;
+  assert.equal(s.bookings.operation.startConfirmation.status, "expirado");
+  assert.equal(s.bookings.operation.status, "confirmado");
+  assert.equal(s.bookings.operation.refund, undefined);
+  assert.throws(
+    () =>
+      act(
+        s,
+        teacher,
+        "confirmStart",
+        { booking: "operation", code: "00000000" },
+        time + 11 * 60000,
+      ),
+    /dez minutos/,
+  );
+  s = act(s, teacher, "complete", { booking: "operation" }, time + HOUR);
+  assert.throws(
+    () =>
+      act(
+        s,
+        teacher,
+        "eligibility",
+        { booking: "operation" },
+        time + 26 * HOUR,
+      ),
+    /Início não confirmado/,
+  );
+});
+test("códigos são específicos por aula e não se reutilizam entre as duas reservas", () => {
+  let s = act(
+    fixture(),
+    student,
+    "book",
+    { instructor: "t", start: now + DAY, lessonCount: 2 },
+    now,
+    "g",
+  );
+  for (const b of ["g", "g_2"]) s = act(s, teacher, "accept", { booking: b });
+  s = act(s, student, "pay", { booking: "g" });
+  let r = execute(s, student, "state", {}, now + DAY);
+  s = r.state;
+  const first = r.result.bookings.g.startConfirmation.code;
+  r = execute(s, student, "state", {}, now + DAY + HOUR);
+  s = r.state;
+  assert.ok(first !== r.result.bookings.g_2.startConfirmation.code);
+  r = execute(
+    s,
+    teacher,
+    "confirmStart",
+    { booking: "g_2", code: first },
+    now + DAY + HOUR,
+  );
+  assert.match(r.result.operationError, /incorreto/);
+});
+test("relógio controlado exige cenário demo, administrador e emulador; payload comum não controla tempo", () => {
+  let s = fixture();
+  s.demo = { scope: "demo-clock" };
+  const trusted = { emulator: true, demoScope: "demo-clock", realNow: now };
+  s = act(s, student, "book", { instructor: "t", start: now + DAY });
+  assert.throws(
+    () =>
+      act(
+        s,
+        student,
+        "setDemoClock",
+        { booking: "operation", stage: "start" },
+        now,
+        "clock",
+        trusted,
+      ),
+    /administrador/,
+  );
+  assert.throws(
+    () =>
+      act(
+        s,
+        admin,
+        "setDemoClock",
+        { booking: "operation", stage: "start" },
+        now,
+        "clock",
+        { ...trusted, emulator: false },
+      ),
+    /exclusivo/,
+  );
+  assert.throws(
+    () =>
+      act(
+        s,
+        admin,
+        "setDemoClock",
+        { booking: "operation", stage: "start" },
+        now,
+        "clock",
+        { ...trusted, demoScope: "test-clock" },
+      ),
+    /exclusivo/,
+  );
+  s = act(
+    s,
+    admin,
+    "setDemoClock",
+    { booking: "operation", stage: "start" },
+    now,
+    "clock",
+    trusted,
+  );
+  const { effectiveNow } = require("../functions/state-scope");
+  assert.equal(
+    effectiveNow(s, { stateScope: "demo-clock" }, now, true),
+    now + DAY,
+  );
+  assert.equal(effectiveNow(s, { stateScope: "demo-clock" }, now, false), now);
+  assert.equal(effectiveNow(s, { stateScope: "test-clock" }, now, true), now);
+  assert.equal(
+    execute(fixture(), student, "state", { now: now + DAY }, now).result.now,
+    now,
+  );
+});
+test("duas aulas consecutivas são duas reservas de 60min com valor congelado e comissão individual", () => {
+  const s = act(
+    fixture(),
+    student,
+    "book",
+    { instructor: "t", start: now + DAY, lessonCount: 2 },
+    now,
+    "group",
+  );
+  const lessons = Object.values(s.bookings);
+  assert.equal(lessons.length, 2);
+  assert.equal(lessons[1].start, lessons[0].start + HOUR);
+  assert.ok(
+    lessons.every(
+      (b) => b.duration === 60 && b.price === 8500 && b.groupId === "group",
+    ),
+  );
+  assert.equal(
+    lessons.reduce((n, b) => n + b.price, 0),
+    17000,
+  );
+  assert.equal(
+    lessons.reduce((n, b) => n + b.commission, 0),
+    510,
+  );
+});
+test("segunda aula indisponível não deixa metade da solicitação gravada; horários separados recusados", () => {
+  const s = act(
+    fixture(),
+    { uid: "o" },
+    "book",
+    { instructor: "t", start: now + DAY + HOUR },
+    now,
+    "occupied",
+  );
+  assert.throws(
+    () =>
+      act(
+        s,
+        student,
+        "book",
+        { instructor: "t", start: now + DAY, lessonCount: 2 },
+        now,
+        "group",
+      ),
+    /reservado/,
+  );
+  assert.deepEqual(Object.keys(s.bookings), ["occupied"]);
+  assert.throws(
+    () =>
+      act(fixture(), student, "book", {
+        instructor: "t",
+        start: now + DAY,
+        lessonCount: 2,
+        starts: [now + DAY, now + DAY + 2 * HOUR],
+      }),
+    /consecutivos/,
+  );
+  assert.throws(
+    () =>
+      act(fixture(), student, "book", {
+        instructor: "t",
+        start: now + DAY + 14 * HOUR,
+        lessonCount: 2,
+      }),
+    /mesma data/,
+  );
+});
+test("pagamento conjunto exige aceite das duas; cancelamento de cada aula usa política existente", () => {
+  let s = act(
+    fixture(),
+    student,
+    "book",
+    { instructor: "t", start: now + DAY, lessonCount: 2 },
+    now,
+    "group",
+  );
+  s = act(s, teacher, "accept", { booking: "group" });
+  assert.throws(
+    () => act(s, student, "pay", { booking: "group" }),
+    /duas aulas/,
+  );
+  assert.ok(Object.values(s.bookings).every((b) => !b.paid));
+  s = act(s, teacher, "accept", { booking: "group_2" });
+  s = act(s, student, "pay", { booking: "group" });
+  assert.ok(Object.values(s.bookings).every((b) => b.paid));
+  s = act(s, student, "cancel", { booking: "group" }, now + DAY - HOUR);
+  assert.equal(s.bookings.group.refund, 4250);
+  assert.equal(s.bookings.group_2.status, "confirmado");
+  assert.equal(s.bookings.group_2.price, 8500);
+});
+test("não lidas contam somente recebidas, leitura autorizada persiste e reenvio não duplica", () => {
+  let s = act(
+    fixture(),
+    student,
+    "message",
+    { to: "t", text: "Mensagem fictícia", requestId: "unread-001" },
+    now,
+    "m1",
+  );
+  assert.equal(execute(s, teacher, "state").result.unreadCount, 1);
+  assert.equal(execute(s, student, "state").result.unreadCount, 0);
+  s = act(
+    s,
+    student,
+    "message",
+    { to: "t", text: "Mensagem fictícia", requestId: "unread-001" },
+    now,
+    "m2",
+  );
+  assert.equal(s.messages.length, 1);
+  assert.throws(
+    () => act(s, { uid: "o" }, "readMessages", { to: "s", messages: ["m1"] }),
+    /outro participante/,
+  );
+  s = act(s, teacher, "readMessages", { to: "s", messages: ["m1"] });
+  const read = s.messages[0].readAt;
+  s = act(
+    s,
+    teacher,
+    "readMessages",
+    { to: "s", messages: ["m1"] },
+    now + 1000,
+  );
+  assert.equal(s.messages[0].readAt, read);
+  assert.equal(execute(s, teacher, "state").result.unreadCount, 0);
+});
+test("filtros refletem estados reais e disputa sem inventar status", () => {
+  assert.ok(ux.matchesBooking({ status: "solicitado" }, "Pendentes"));
+  assert.ok(!ux.matchesBooking({ status: "confirmado" }, "Pendentes"));
+  assert.ok(
+    ux.matchesBooking({ status: "concluido", disputeOpen: true }, "Em disputa"),
+  );
+  assert.ok(ux.matchesBooking({ status: "falta_aluno" }, "Faltas"));
+  assert.equal(ux.homeTab("aluno"), "Início");
+  assert.equal(ux.homeTab("instrutor"), "Início");
+  assert.equal(ux.homeTab("admin"), "Início");
+  assert.equal(ux.homeTab("aluno", true), "Perfil");
+});
+test("lista completa exclui inaptos; destaque não inventa profissionais", () => {
+  const users = [
+    { id: "a", role: "instrutor", eligible: true, name: "A", featured: true },
+    { id: "b", role: "instrutor", eligible: true, name: "B" },
+    { id: "c", role: "instrutor", eligible: false, name: "C" },
+    { id: "d", role: "aluno", eligible: true, name: "D" },
+  ];
+  assert.deepEqual(
+    ux.instructorList(users, "avulsas", "").map((u) => u.id),
+    ["a"],
+  );
+  assert.deepEqual(
+    ux.instructorList(users, "instrutores", "").map((u) => u.id),
+    ["a", "b"],
+  );
+  assert.deepEqual(
+    ux.instructorList(users, "favoritos", "", ["b"]).map((u) => u.id),
+    ["b"],
+  );
+  assert.deepEqual(
+    ux.instructorList(users, "instrutores", "B").map((u) => u.id),
+    ["b"],
+  );
+});
+test("endereço estruturado exige campos; CEP opcional e s/n válidos", () => {
+  const { address, formatAddress } = require("../functions/address");
+  const a = {
+    street: "Rua Fictícia",
+    number: "s/n",
+    neighborhood: "Centro",
+    city: "Niterói",
+    uf: "rj",
+  };
+  assert.equal(address(a).cep, "");
+  assert.match(formatAddress(address(a)), /s\/n/);
+  assert.throws(() => address({ ...a, street: "" }), /rua/);
+  assert.throws(() => address({ ...a, cep: "123" }), /oito/);
+  assert.throws(
+    () =>
+      execute(
+        fixture(),
+        student,
+        "book",
+        { instructor: "t", start: now + DAY },
+        now,
+      ),
+    /rua/,
+  );
+  const s = booked();
+  assert.equal(s.bookings.operation.address.number, "s/n");
+});
+test("ViaCEP preenche dados disponíveis e falhas preservam a alternativa manual", async () => {
+  const mod = new Module(__filename);
+  mod._compile(
+    ts.transpileModule(fs.readFileSync("src/lib/cep.ts", "utf8"), {
+      compilerOptions: { module: ts.ModuleKind.CommonJS },
+    }).outputText,
+    __filename,
+  );
+  let url;
+  const found = await mod.exports.lookupCep("24000-000", async (u) => {
+    url = u;
+    return {
+      ok: true,
+      json: async () => ({
+        logradouro: "Rua Fictícia",
+        bairro: "Centro",
+        localidade: "Niterói",
+        uf: "RJ",
+      }),
+    };
+  });
+  assert.match(url, /24000000\/json/);
+  assert.equal(found.street, "Rua Fictícia");
+  await assert.rejects(() => mod.exports.lookupCep("123"), /oito/);
+  await assert.rejects(
+    () =>
+      mod.exports.lookupCep("99999999", async () => ({
+        ok: true,
+        json: async () => ({ erro: true }),
+      })),
+    /manualmente/,
+  );
+  await assert.rejects(
+    () =>
+      mod.exports.lookupCep("24000000", async () => {
+        throw Error("offline");
+      }),
+    /manualmente/,
+  );
+});

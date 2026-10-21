@@ -19,20 +19,22 @@ Depois **saia e entre novamente** nas três contas. Tokens antigos podem continu
 
 Cada preparação cria um cenário próprio, com identificador `demo-<UUID>`, sem sobrescrever `private/state` ou ensaios anteriores. O manifesto fica em `.tools/demo-current.json`. **Execute novamente em 30/10, antes da banca**, para renovar as datas e recuperar uma aula histórica ainda sem conclusão/avaliações. Reiniciar o aplicativo sozinho preserva o cenário já usado.
 
-A agenda vem configurada em dois períodos por dia, 08–12 e 14–18. O instrutor principal tem aprovação fictícia e validade de 90 dias. Também há uma ocorrência de suporte e um segundo perfil fictício pendente para o administrador analisar. Não use documentos, endereços ou fotos reais.
+A agenda vem configurada em dois períodos por dia, 08–12 e 14–18. Aluno e instrutor principais começam com fotos ilustrativas e identidade aprovada explicitamente como dados fictícios do ensaio. O instrutor também tem credenciamento profissional aprovado e validade de 90 dias. Há suporte e um segundo perfil fictício pendente de credenciamento para análise. Não use documentos, endereços ou fotos reais.
 
 ## Sequência para mostrar os fluxos
 
 1. **Instrutor e agenda:** entre como instrutor. Mostre aprovação manual, validade e os dois períodos diários. A agenda pode ser editada pelo formulário normal.
 2. **Conclusão sem esperar uma hora:** em Agendamentos, abra a aula com local “Cenário histórico fictício — concluir e avaliar”. Ela foi preparada com pagamento simulado e término há aproximadamente uma ou duas horas. Toque em “Concluir aula após o término”. O servidor usa o relógio normal e aplica as mesmas regras das outras aulas. A confirmação do aluno não é obrigatória.
 3. **Aluno autenticado e contato:** entre como aluno, busque Marcos Oliveira e abra o perfil. Toque em “Conversar com o instrutor” e envie uma mensagem fictícia. A conversa exibirá **SEM AGENDAMENTO**, pois a histórica já está concluída e ainda não existe reserva futura.
-4. **Disponibilidade e solicitação:** volte ao perfil do instrutor, escolha um horário futuro dos próximos sete dias e informe um ponto fictício de encontro, sem CEP se desejar. Solicite a aula. O horário já fica reservado e a tag muda para **AGENDADO**, mesmo sem pagamento.
-5. **Aceite:** entre como instrutor. Veja a notificação de nova solicitação, o histórico da mensagem e a reserva. Aceite a solicitação. Ela fica **Aguardando pagamento**.
-6. **Pagamento simulado e confirmação:** entre como aluno. Veja a notificação do aceite, abra a reserva e toque em “Confirmar pagamento SIMULADO”. Confira status confirmado, preço de R$ 85 e comissão de R$ 2,55. Nenhuma cobrança externa ocorre.
+4. **Disponibilidade e solicitação:** volte ao perfil do instrutor e escolha um horário futuro dos próximos sete dias. Selecione uma aula ou duas consecutivas; duas usam o mesmo dia, 120min e total de R$170. Informe rua, número (aceita s/n), bairro, cidade e UF fictícios; CEP é opcional, com ViaCEP e alternativa manual. Solicite. Os horários ficam reservados e a tag muda para **AGENDADO**, mesmo sem pagamento.
+5. **Aceite:** entre como instrutor. Veja a notificação, o histórico e o filtro Pendentes. Aceite cada aula solicitada. Elas ficam **Aguardando pagamento**. Duas aulas relacionadas precisam dos dois aceites antes do pagamento conjunto.
+6. **Pagamento simulado e confirmação:** entre como aluno. Abra a reserva e toque em “Confirmar pagamento SIMULADO”. Confira confirmação e total de R$85 ou R$170. A comissão de 3% continua calculada/armazenada no backend por aula, sem exposição no card do aluno. Os dois participantes precisam ter foto e identidade aprovada. Nenhuma cobrança externa ocorre.
 7. **Bloqueio do horário:** abra novamente os horários do instrutor. O horário solicitado não aparece. A integração também valida duas reservas simultâneas: somente uma é aceita.
-8. **Mensagens e notificações:** mostre que ambos os participantes veem o histórico; um terceiro não recebe essas mensagens. Abra “Notificações”, veja os avisos de aceite/confirmada e marque um como lido. A atualização entre contas usa a consulta existente a cada 10 segundos; “Atualizar” permite conferir imediatamente.
+8. **Mensagens e notificações:** envie mensagem entre as contas fictícias e confira o badge de recebidas não lidas na aba Mensagens. A lista sozinha não marca leitura; abrir a conversa marca as recebidas. Um terceiro não recebe o histórico. Abra Notificações, confira aceite/confirmada e marque um aviso como lido. Atualizações usam consulta a cada 10s; Atualizar confere imediatamente.
 9. **Avaliações:** na aula histórica concluída, aluno e instrutor avaliam uma vez cada. A avaliação do instrutor é pública para os usuários do aplicativo, sem divulgar o vínculo privado para terceiros. A avaliação do aluno só pode ser acessada pelo destinatário, autor e administração.
-10. **Administração:** entre como admin. Mostre o perfil “Instrutor Fictício Pendente”, número/validade e parecer de aprovação ou rejeição manual. Em Ocorrências, abra o suporte fictício e registre uma decisão. Esse perfil pendente foi incluído no cenário para a análise; não é uma verificação do Detran nem upload documental.
+10. **Administração:** mostre o “Instrutor Fictício Pendente”, número/validade e parecer de credenciamento manual. Essa aprovação profissional é distinta da identidade; cumprir uma não substitui a outra. Em Ocorrências, abra o suporte fictício e registre uma decisão. Não há consulta ao Detran.
+11. **Fotos e identidade:** em Perfil → Foto e verificação de identidade, selecione `assets/demo/perfil-ficticio.png`, confira prévia e salve. Com aula ativa, remover a foto é recusado, mas substituir é permitido. Envie `assets/demo/documento-ficticio.png`; conta passa a aguardar análise e conserva perfil/suporte. Admin compara as duas ilustrações, informa parecer e aprova/rejeita. Após aprovação, aluno recebe notificação e volta a operar. Trocar foto depois do envio exige nova comparação; faça essa parte antes do fluxo de início se desejar usar a mesma conta.
+12. **Início com código:** siga a seção abaixo para mostrar código sem esperar o horário real. O código é privado do aluno e não deve ser incluído em prints/documentos da apresentação.
 
 **Observação sobre a tag inicial:** antes de concluir a histórica, ela está confirmada e portanto também conta como AGENDADO, mesmo com horário passado. A classificação segue os estados aprovados do produto. Por isso a conclusão histórica vem antes da demonstração de SEM AGENDAMENTO.
 
@@ -43,15 +45,30 @@ A agenda vem configurada em dois períodos por dia, 08–12 e 14–18. O instrut
 - **Falta seguida de contestação:** depois das avaliações, o admin pode registrar uma ocorrência fictícia de falta na histórica, com motivo explícito de ensaio. O aluno/instrutor ainda pode contestar até 24h após o término. A abertura bloqueia a elegibilidade e não modifica o pagamento/estorno que já estavam registrados. O admin analisa e decide expressamente. Para repetir, prepare outro cenário.
 - **Evidências:** as permissões de upload/leitura/listagem foram testadas nos emuladores. O seletor/renderização não foram conferidos manualmente nesta tarefa; ensaie antes se quiser demonstrar anexos.
 
+## Código de início e relógio controlado
+
+1. Solicite, aceite e pague uma aula nova pelo fluxo acima. A histórica legada não exige código retroativamente.
+2. No admin, abra essa aula em Agendamentos e use o controle **Ensaio: horário de início**. O aviso do relógio controlado deve aparecer. Isso desloca somente o cenário fictício `demo-*` nos emuladores, com claim administrativa e limite de sete dias; não altera o relógio do computador.
+3. No aluno, abra a aula: aparece código próprio, disponível do início até +10min. No instrutor, só aparece o campo para inserir, nunca o segredo por outra tela/API. Copie verbalmente entre participantes do ensaio; não inclua código ativo em gravações ou documentos públicos.
+4. Digite um código errado e veja tentativas restantes. Digite o correto, confirme e confira o horário registrado. Após cinco erros o fluxo bloqueia e encaminha ao suporte. Repetir a mesma confirmação não duplica o início.
+5. Tentar concluir antes do término é recusado. No admin, avance para término da aula; então o instrutor consegue concluir e os participantes podem avaliar.
+6. Para mostrar expiração, use outra aula confirmada e não iniciada: no admin escolha **Ensaio: após dez minutos** (+11min). Os participantes veem prazo expirado e opção de suporte. Não ocorre falta, cancelamento, reembolso ou liberação financeira automática.
+7. Use **Restaurar relógio do ensaio** no admin. Não retrocede registros já confirmados/concluídos; para repetir o roteiro inteiro, prepare um cenário novo e entre novamente nas contas.
+
+Avisos de início e expiração surgem no próximo acesso ao servidor/polling. Não existe scheduler/push. Para aulas novas, sem início confirmado a elegibilidade continua bloqueada mesmo após conclusão. A decisão administrativa para liberar casos excepcionais depende de regra comercial ainda não definida; não há atalho financeiro de demonstração.
+
 ## Explicações para a banca
 
 - Tudo ocorre em Firebase Emulators, com dados fictícios e em loopback.
 - Pagamentos, estornos e elegibilidade são simulações. Elegível não significa dinheiro transferido.
-- A conclusão histórica é uma preparação explícita de demonstração. Não existe botão para forçar conclusão de aula futura, parâmetro de relógio enviado pelo cliente ou integração automática com Detran.
+- A histórica é preparação explícita, concluída pelo horário real. O relógio adicional de ensaio é exclusivo de admin no próprio cenário fictício dos emuladores; payload comum não escolhe o horário. Não existe integração automática com Detran.
 - No-show não remove o direito de contestar dentro da janela. A administração analisa a ocorrência.
 - Aluno cancela acima de duas horas: integral; até duas horas antes do início: 50%; falta: zero. Instrutor cancela: integral. Estes critérios existentes foram preservados.
 - Penalidades não alteram estrelas. O contador de cancelamentos ainda inclui todos os cancelamentos do instrutor; a definição de “relevante” continua pendente na auditoria.
-- Credenciamento mostra número/validade/parecer; a conferência documental completa continua fora do app. Endereço é texto livre, sem CEP estruturado.
+- Credenciamento profissional mostra número/validade/parecer; identidade possui envio privado e comparação manual de documento fictício, sem biometria. Endereço de novas reservas é estruturado, com CEP opcional.
+- Regras financeiras e decisões pendentes: [AUDITORIA_CANCELAMENTOS_TCC.md](AUDITORIA_CANCELAMENTOS_TCC.md). Duas aulas são relacionadas e administradas individualmente, sem desconto ou multa de pacote.
+
+Resultado e limites do ensaio web, capturas e verificações: [IMPLEMENTACOES_URGENTES_TCC.md](IMPLEMENTACOES_URGENTES_TCC.md). Android/iOS físico será validado em etapa separada.
 
 ## Preservação
 

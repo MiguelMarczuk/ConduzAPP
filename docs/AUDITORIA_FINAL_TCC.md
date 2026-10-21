@@ -1,5 +1,13 @@
 # ConduzAPP — Auditoria final e correções prioritárias do TCC
 
+## Adendo — implementações urgentes para 30/10/2026
+
+O resultado atual desta nova etapa está em [IMPLEMENTACOES_URGENTES_TCC.md](IMPLEMENTACOES_URGENTES_TCC.md): **52 unitários, 23 integrações/autorização, TypeScript e build web aprovados**, com ensaio manual web e 16 capturas. Fotos persistentes, identidade privada/manual, não lidas, lista elegível, filtros, endereço com CEP, duas aulas e código de início foram acrescentados. Regras financeiras aprovadas permanecem: [auditoria de cancelamentos](AUDITORIA_CANCELAMENTOS_TCC.md).
+
+As contagens de 55 regras, 31/15 testes e pendências nas seções abaixo são o retrato histórico da recuperação anterior. Não representam uma nova recontagem dos requisitos ampliados. CEP estruturado, busca com testes dedicados, envio documental de identidade e seletor/renderização web de fotos já foram atendidos; identidade não substitui o credenciamento profissional. Agora existe relógio de ensaio restrito a admin/cenário `demo-*`/emuladores, descrito no [roteiro atualizado](DEMONSTRACAO.md). Permanecem validação em aparelhos, critério de cancelamento relevante, decisões financeiras novas e limites do ambiente local.
+
+## Registro anterior preservado
+
 Atualizado em **19/10/2026 (Brasília)**. Apresentação: **30/10/2026**. Branch: `recuperacao-tcc`.
 
 **Resultado atual: 50 regras implementadas e validadas, 1 implementada sem validação específica, 4 parciais e nenhuma ausente, entre os mesmos 55 itens da auditoria.** Os defeitos de privacidade e contestação após falta foram corrigidos. Chat antes da reserva, tags e notificações internas foram recuperados. A validação nova soma **31 testes unitários e 15 de integração aprovados**, além de TypeScript, build web e conferência manual descrita abaixo.
