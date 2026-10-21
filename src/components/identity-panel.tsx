@@ -12,7 +12,7 @@ import { ThemedText as Text } from "@/components/themed-text";
 import { StoredImage } from "./stored-image";
 import { identityStatusLabel } from "@/lib/presentation";
 import { panelStyles as s } from "@/constants/panel-styles";
-function UploadImage({ document = false }: { document?: boolean }) {
+export function useImageUpload(document = false) {
   const { run, busy } = useSession();
   const [asset, setAsset] = useState<ImagePicker.ImagePickerAsset | null>(null),
     [message, setMessage] = useState(""),
@@ -144,13 +144,32 @@ function UploadImage({ document = false }: { document?: boolean }) {
       setProgress("");
     }
   }
+  return {
+    asset,
+    message,
+    progress,
+    sending,
+    busy,
+    choose,
+    send,
+    discard: () => setAsset(null),
+  };
+}
+type ImageUpload = ReturnType<typeof useImageUpload>;
+function UploadImage({
+  upload,
+  document = false,
+}: {
+  upload: ImageUpload;
+  document?: boolean;
+}) {
+  const { asset, message, progress, sending, busy, choose, send, discard } =
+    upload;
   return (
     <View style={s.gap}>
       <Button
         title={
-          document
-            ? "Selecionar documento fictício"
-            : "Selecionar foto da galeria"
+          document ? "Selecionar documento fictício" : "Escolher foto de perfil"
         }
         variant="secondary"
         onPress={choose}
@@ -181,7 +200,7 @@ function UploadImage({ document = false }: { document?: boolean }) {
           <Button
             title="Descartar prévia"
             variant="secondary"
-            onPress={() => setAsset(null)}
+            onPress={discard}
             disabled={sending}
           />
         </>
@@ -191,7 +210,17 @@ function UploadImage({ document = false }: { document?: boolean }) {
     </View>
   );
 }
-export function IdentityPanel({ photoOnly = false }: { photoOnly?: boolean }) {
+function DocumentUpload() {
+  const upload = useImageUpload(true);
+  return <UploadImage upload={upload} document />;
+}
+export function IdentityPanel({
+  photoOnly = false,
+  photoUpload,
+}: {
+  photoOnly?: boolean;
+  photoUpload: ImageUpload;
+}) {
   const { state, run, busy } = useSession(),
     me = state!.me!;
   const identity = me.identity;
@@ -216,7 +245,7 @@ export function IdentityPanel({ photoOnly = false }: { photoOnly?: boolean }) {
           necessária.
         </Text>
       )}
-      <UploadImage />
+      <UploadImage upload={photoUpload} />
       {!!me.photoPath && (
         <Button
           title="Remover foto"
@@ -243,7 +272,7 @@ export function IdentityPanel({ photoOnly = false }: { photoOnly?: boolean }) {
           Decisão registrada em {dateTime(identity.reviewedAt)}
         </Text>
       )}
-      {!photoOnly && <UploadImage document />}
+      {!photoOnly && <DocumentUpload />}
     </Card>
   );
 }

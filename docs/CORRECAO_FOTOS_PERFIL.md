@@ -1,5 +1,17 @@
 # Correção do fluxo de foto — 21/10/2026
 
+## Complemento — clique direto e rótulo de perfil
+
+Após novo relato, confirmou-se que **Alterar foto apenas trocava a seção local**, sem abrir o seletor. Para uma conta pendente, a seção já estava visível e o clique parecia não fazer nada. Agora o botão chama diretamente a mesma seleção de imagem usada por **Escolher foto de perfil** (novo rótulo solicitado). O estado da seleção/prévia foi elevado ao perfil e compartilhado com o painel; não existe um segundo serviço de upload nem abertura por efeito atrasado.
+
+Também foi identificada uma causa de interface desatualizada: `scripts/ambiente.ps1` define `CI=1`, herdado por `scripts/run-web.ps1`. O Metro instalado informa, em `instantiateMetro.js`, que CI desativa a observação de arquivos/reloads. A página continuou apresentando o código antigo mesmo após recarga. `run-web.ps1` agora limpa CI somente para o servidor de desenvolvimento; testes/build mantêm seu ambiente anterior. Foi reiniciado somente o Expo, preservando Firebase e dados, e o rótulo novo foi conferido na página atual.
+
+**Prova nova no navegador:** contas fictícias em um cenário `test-*` separado, sem trocar fotos/documentos das contas em uso. No aluno aprovado de teste (painel inicialmente fechado) e no instrutor pendente (painel já visível), um clique em **Alterar foto** disparou o evento real de seletor. **Escolher foto de perfil** também disparou o seletor em ambos. O JPEG fotográfico foi recebido, prévia apareceu e **Salvar foto de perfil** concluiu, mostrando a imagem no Avatar. A sessão administrativa que estava aberta foi restaurada após o ensaio.
+
+**Verificação nova executada:** 52 unitários, 24 integrações/autorização, TypeScript e build web com 23 rotas, todos aprovados. Log `.tools/photo-button-verificar.log`. A abertura do seletor é validação manual pelo navegador e não está sendo contada como teste unitário/integrado. Capturas em [visual/botoes-foto/](visual/botoes-foto/). Arquivos deste complemento: `src/app/painel.tsx`, `src/components/identity-panel.tsx`, `scripts/run-web.ps1`, este relatório e capturas. Backend, autenticação e regras Firebase inalterados; sem push/deploy.
+
+As seções abaixo registram a investigação anterior, preservadas com seus rótulos e resultados históricos.
+
 Branch `recuperacao-tcc`, sobre o checkpoint `2263cd2`. Escopo: foto de perfil e diagnóstico local, sem push/deploy ou mudança de regras de negócio/Firebase.
 
 ## Causa reproduzida

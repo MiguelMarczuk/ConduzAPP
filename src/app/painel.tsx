@@ -32,7 +32,11 @@ import { Badge } from "@/components/ui/badge";
 import { MenuRow } from "@/components/ui/menu-row";
 import { UI } from "@/constants/theme";
 import { panelStyles as s } from "@/constants/panel-styles";
-import { IdentityPanel, IdentityAdmin } from "@/components/identity-panel";
+import {
+  IdentityPanel,
+  IdentityAdmin,
+  useImageUpload,
+} from "@/components/identity-panel";
 import { AddressForm } from "@/components/address-form";
 import { StartConfirmation } from "@/components/start-confirmation";
 import { emptyAddress } from "@/lib/cep";
@@ -1760,6 +1764,7 @@ function Profile({ navigate }: { navigate?: (tab: string) => void }) {
   const { state, run } = useSession(),
     router = useRouter();
   const me = state!.me!;
+  const photoUpload = useImageUpload();
   const [section, setSection] = useState<string | null>(null);
   const toggle = (key: string) => setSection(section === key ? null : key);
   const [name, setName] = useState(me.name),
@@ -1799,7 +1804,11 @@ function Profile({ navigate }: { navigate?: (tab: string) => void }) {
           <Button
             title="Alterar foto"
             variant="secondary"
-            onPress={() => setSection("identity")}
+            disabled={photoUpload.busy || photoUpload.sending}
+            onPress={() => {
+              setSection("identity");
+              void photoUpload.choose();
+            }}
           />
         )}
       </View>
@@ -1808,6 +1817,7 @@ function Profile({ navigate }: { navigate?: (tab: string) => void }) {
           me.identity?.status !== "aprovado") && (
           <IdentityPanel
             photoOnly={section === "edit" && me.identity?.status === "aprovado"}
+            photoUpload={photoUpload}
           />
         )}
       {!section && (
