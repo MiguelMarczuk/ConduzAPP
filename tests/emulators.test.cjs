@@ -182,6 +182,20 @@ test("mensagens não lidas e endereço estruturado persistem com autorização",
  r=await call('aluno','book',{instructor:users.instrutor.uid,start});const b=Object.values(r.result.bookings)[0];assert.equal(b.address.number,'s/n');assert.match(b.location,/Rua Fictícia/);
  assert.ok((await call('aluno','book',{instructor:users.instrutor.uid,start:start+HOUR,address:{street:''}})).error);
 });
+test("grupo de duas aulas é transacional contra solicitação concorrente no segundo horário",async()=>{
+ const groupStart=Date.parse(new Date(now+DAY-3*HOUR).toISOString().slice(0,10)+'T09:00:00-03:00');
+ const result=await Promise.all([call('aluno','book',{instructor:users.instrutor.uid,start:groupStart,lessonCount:2}),call('outro','book',{instructor:users.instrutor.uid,start:groupStart+HOUR})]);
+ assert.equal(result.filter(r=>r.result).length,1);
+ const state=(await stateRef.get()).data(),bookings=Object.values(state.bookings);
+ const group=bookings.filter(b=>b.student===users.aluno.uid);assert.ok(group.length===0||group.length===2);if(group.length){assert.equal(group[1].start-group[0].start,HOUR);assert.equal(group.reduce((n,b)=>n+b.price,0),17000);}
+});
+test("duas aulas: aceite e pagamento simulado conjunto preservam acompanhamento individual",async()=>{
+ const groupStart=Date.parse(new Date(now+DAY-3*HOUR).toISOString().slice(0,10)+'T09:00:00-03:00');
+ let r=await call('aluno','book',{instructor:users.instrutor.uid,start:groupStart,lessonCount:2});assert.ok(r.result,JSON.stringify(r));const lessons=Object.values(r.result.bookings);
+ for(const b of lessons)assert.ok((await call('instrutor','accept',{booking:b.id})).result);
+ r=await call('aluno','pay',{booking:lessons[0].id});assert.ok(Object.values(r.result.bookings).every(b=>b.paid&&b.duration===60));
+ r=await call('aluno','cancel',{booking:lessons[0].id});assert.equal(r.result.bookings[lessons[0].id].refund,8500);assert.equal(r.result.bookings[lessons[1].id].status,'confirmado');
+});
 test("duas reservas concorrentes: exatamente uma é aceita na transação", async () => {
   const results = await Promise.all(
     ["aluno", "outro"].map((role) =>

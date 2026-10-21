@@ -400,6 +400,7 @@ function Search({
   const [mode,setMode]=useState(initialFavorites?"favoritos":"avulsas");
   const onlyFavorites=mode === "favoritos";
   const setOnlyFavorites=(value:boolean)=>setMode(value?"favoritos":"avulsas");
+  const [lessonCount,setLessonCount]=useState(1);
   const [slot, setSlot] = useState<number | null>(null);
   const [chosenDay, setChosenDay] = useState("");
   const [showDetails, setShowDetails] = useState(false);
@@ -408,12 +409,13 @@ function Search({
   const instructors=Object.values(state!.users).filter(u=>u.role === "instrutor" && u.eligible);
   const visible=instructorList(Object.values(state!.users),mode,search,me.favorites);
   const u = selected ? state!.users[selected] : null;
+  const availableSlots=(u?.slots||[]).filter(t=>lessonCount===1 || ((u?.slots||[]).includes(t+3600000) && dayKey(t)===dayKey(t+3600000)));
   const days = Array.from({ length: 7 }, (_, i) => state!.now + i * 86400000);
   const activeDay = days.some((d) => dayKey(d) === chosenDay)
     ? chosenDay
     : dayKey(u?.slots?.[0] || days[0]);
   const activeSlot =
-    slot && u?.slots?.includes(slot) && dayKey(slot) === activeDay
+    slot && availableSlots.includes(slot) && dayKey(slot) === activeDay
       ? slot
       : null;
   if (u)
@@ -507,6 +509,7 @@ function Search({
           </View>
         </Card>
         <Card style={s.sectionCard}>
+          <View style={s.row}>{[1,2].map(count=><Button key={count} title={count===1?"1 aula · 60 min":"2 aulas · 120 min"} variant={lessonCount===count?"primary":"secondary"} onPress={()=>{setLessonCount(count);setSlot(null);}}/>)}</View>
           <View style={s.sectionHeading}>
             <Icon name="calendar" />
             <Text style={s.cardTitle}>Selecionar data</Text>
@@ -519,7 +522,7 @@ function Search({
           >
             {days.map((day) => {
               const key = dayKey(day),
-                available = (u.slots || []).some(
+                available = availableSlots.some(
                   (time) => dayKey(time) === key,
                 );
               return (
@@ -567,7 +570,7 @@ function Search({
             <Text style={s.cardTitle}>Selecionar horário</Text>
           </View>
           <View style={s.row}>
-            {(u.slots || [])
+            {availableSlots
               .filter((time) => dayKey(time) === activeDay)
               .map((time) => (
                 <TouchableOpacity
@@ -597,17 +600,17 @@ function Search({
           <AddressForm value={meetingAddress} onChange={setMeetingAddress}/>
           <View style={s.summary}>
             <View style={s.flex}>
-              <Text style={s.small}>Sua aula · 60 minutos</Text>
+              <Text style={s.small}>{lessonCount} {lessonCount===1?"aula":"aulas consecutivas"} · {lessonCount*60} minutos</Text>
               <Text style={s.cardTitle}>
                 {activeSlot ? dateTime(activeSlot) : "Selecione data e horário"}
               </Text>
             </View>
-            <Text style={s.price}>{money(u.price)}</Text>
+            <Text style={s.price}>{money((u.price||0)*lessonCount)}</Text>
           </View>
           <Button
             title={
               activeSlot
-                ? "Solicitar aula · " + money(u.price)
+                ? "Solicitar " + lessonCount + (lessonCount===1?" aula · ":" aulas · ") + money((u.price||0)*lessonCount)
                 : "Selecione um horário"
             }
             disabled={!activeSlot || busy}
@@ -616,6 +619,7 @@ function Search({
                 await run("book", {
                   instructor: u.id,
                   start: activeSlot,
+                  lessonCount,
                   address:meetingAddress,
                 })
               ) {
@@ -627,7 +631,7 @@ function Search({
           />
           <Text style={s.small}>
             A solicitação depende do aceite do instrutor. O pagamento simulado
-            fica disponível depois do aceite.
+            fica disponível depois do aceite. Duas aulas são acompanhadas individualmente, com as regras existentes para cada aula.
           </Text>
         </Card>
         <Reviews uid={u.id} />
@@ -976,6 +980,8 @@ function BookingCard({ booking: b }: { booking: Booking }) {
     teacher = me.id === b.instructor,
     admin = me.role === "admin";
   const now = state!.now;
+  const groupPending=b.groupId?Object.values(state!.bookings).filter(x=>x.groupId===b.groupId && !x.paid && ["solicitado","aguardando_pagamento"].includes(x.status)): [b];
+  const paymentTotal=groupPending.reduce((sum,x)=>sum+x.price,0);
   const [expand, setExpand] = useState(false),
     [reason, setReason] = useState(""),
     [newStart, setNewStart] = useState("");
@@ -1008,6 +1014,7 @@ function BookingCard({ booking: b }: { booking: Booking }) {
           {b.paid ? "Pagamento simulado confirmado" : "Sem pagamento"}
         </Text>
       </View>
+      {!!b.groupId&&<Text style={s.small}>Aula {b.lessonNumber}/2 · solicitação conjunta de 120 min · total contratado {money(b.groupPrice)}. Gestão individual por aula.</Text>}
       <View style={s.vehicleLine}>
         <Icon name="pin" size={17} color={UI.color.textSecondary} />
         <Text style={s.small}>
@@ -1035,7 +1042,7 @@ function BookingCard({ booking: b }: { booking: Booking }) {
           {(student || teacher) && (!state!.users[b.student]?.photoPath || !state!.users[b.instructor]?.photoPath) && <Text style={s.error}>Ambos precisam de foto de perfil para confirmar. Acesse Perfil para adicionar ou substituir sua foto. Aulas antigas não foram canceladas.</Text>}
           {student && b.status === "aguardando_pagamento" && (
             <Button
-              title="Confirmar pagamento SIMULADO"
+              title={"Confirmar pagamento SIMULADO · "+money(paymentTotal)}
               onPress={() => run("pay", { booking: b.id })}
             />
           )}

@@ -47,6 +47,10 @@ export type Booking = {
   paid: boolean;
   location: string;
   address?: {cep:string;street:string;number:string;neighborhood:string;city:string;uf:string};
+  groupId?:string;
+  lessonNumber?:number;
+  lessonCount?:number;
+  groupPrice?:number;
   payoutEligible: boolean;
   studentConfirmed?: boolean;
   ratings?: Record<string, number>;

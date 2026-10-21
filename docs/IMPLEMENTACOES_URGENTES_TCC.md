@@ -31,3 +31,11 @@ Não aplicar perda de 100% faltando uma hora, multas ou transferências. Permane
 - ViaCEP usa oito dígitos e JSON, conforme [documentação oficial](https://viacep.com.br/). Timeout, CEP ausente e erro de rede preservam preenchimento manual; resposta antiga não sobrescreve edições feitas durante a consulta.
 
 Validação: **42 unitários, 18 integrações/autorização e TypeScript aprovados**. Inclui contagem/leitura persistente, terceiro recusado, idempotência, busca elegível, filtros, endereço, CEP válido/inexistente/offline com respostas controladas. Teste de `homeTab` é unitário; navegação real será conferida no navegador, não confundida com teste de interface.
+
+## Etapa C — Solicitação de duas aulas
+
+Duas reservas relacionadas (`groupId`), cada uma de 60 minutos e com início próprio, criadas na mesma transação agregada. Uma falha no segundo horário descarta a operação inteira. Backend valida contiguidade, mesma data, disponibilidade, autorização e conflitos dos dois participantes. Preço por aula congelado, soma de dois preços individuais; comissão continua arredondada a centavos por aula conforme a regra existente.
+
+Aceites individuais; pagamento simulado conjunto dos itens aceitos e ainda não pagos. O backend recusa pagamento do par enquanto houver item aguardando aceite. UI informa duração total, total contratado e valor realmente pendente. Cancelamento, remarcação, conclusão, contestação e avaliação continuam por aula; cancelar uma não cancela automaticamente a outra. Sem desconto ou política financeira de pacote. Qualquer pacote comercial com cancelamento parcial, multa ou regras diferentes continua pendente de decisão explícita.
+
+Validação: **45 unitários, 20 integrações e TypeScript aprovados**. Inclui concorrência real no segundo horário, atomicidade, soma de preço/comissão, pagamento conjunto e cancelamento individual preservando a outra aula. O ensaio integrado usa 09h do dia seguinte para não depender de a hora real do teste atravessar a meia-noite; o backend recusa essa travessia no par.

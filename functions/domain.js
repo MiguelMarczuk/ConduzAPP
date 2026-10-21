@@ -309,6 +309,7 @@ function execute(
   s.conversations = conversations(s);
   s.notifications ||= {};
   const me = s.users[actor.uid];
+  const extraNotificationBookings=[];
   const admin = () =>
     check(actor.admin === true, "Acesso exclusivo da administração.");
   const user = () => check(!!me, "Complete seu cadastro.");
@@ -442,38 +443,20 @@ function execute(
           : [...(me.favorites || []), input.instructor];
         break;
       case "book": {
-        const meetingAddress=address(input.address);
+        const meetingAddress=address(input.address),count=input.lessonCount ?? 1;
         check(me.role === "aluno", "Ação exclusiva do aluno.");
-        validSlot(s, input.instructor, input.start, 60, now);
-        check(
-          !Object.values(s.bookings).some(
-            (x) =>
-              x.student === actor.uid &&
-              active(x) &&
-              input.start < end(x) &&
-              input.start + HOUR > x.start,
-          ),
-          "Você já possui uma aula neste horário.",
-        );
-        const u = s.users[input.instructor];
-        check(Number.isInteger(u.price) && u.price > 0, "Preço inválido.");
-        s.bookings[id] = {
-          id,
-          student: actor.uid,
-          instructor: input.instructor,
-          start: input.start,
-          duration: 60,
-          price: u.price,
-          commission: Math.round((u.price * 3) / 100),
-          status: "solicitado",
-          paid: false,
-          paymentMode: "simulado",
-          address:meetingAddress,
-          location:formatAddress(meetingAddress),
-          createdAt: now,
-          ratings: {},
-          payoutEligible: false,
-        };
+        check(count === 1 || count === 2,"Escolha uma ou duas aulas consecutivas.");
+        check(Number.isFinite(input.start),"Escolha um horário válido.");
+        if(input.starts !== undefined) check(Array.isArray(input.starts) && input.starts.length===count && input.starts.every((start,i)=>start===input.start+i*HOUR),"Horários devem ser consecutivos na mesma data.");
+        check(localDate(input.start) === localDate(input.start+(count-1)*HOUR),"As duas aulas devem ocorrer na mesma data.");
+        const u=s.users[input.instructor];
+        for(let i=0;i<count;i++){
+          const start=input.start+i*HOUR,bookingId=i===0?id:id+"_2";
+          validSlot(s,input.instructor,start,60,now);
+          check(!Object.values(s.bookings).some(x=>x.student===actor.uid && active(x) && start<end(x) && start+HOUR>x.start),"Você já possui uma aula neste horário.");
+          check(Number.isInteger(u.price)&&u.price>0,"Preço inválido.");
+          s.bookings[bookingId]={id:bookingId,student:actor.uid,instructor:input.instructor,start,duration:60,price:u.price,commission:Math.round(u.price*3/100),status:"solicitado",paid:false,paymentMode:"simulado",address:meetingAddress,location:formatAddress(meetingAddress),createdAt:now,ratings:{},payoutEligible:false,...(count===2?{groupId:id,lessonNumber:i+1,lessonCount:2,groupPrice:2*u.price}:{})};
+        }
         break;
       }
       case "accept":
@@ -484,7 +467,7 @@ function execute(
         );
         b.status = "aguardando_pagamento";
         break;
-      case "pay":
+      case "pay": {
         student();
         check(s.users[b.student]?.photoPath && s.users[b.instructor]?.photoPath, "Ambos os participantes precisam de foto de perfil para confirmar a aula. Acesse Editar perfil.");
         check(verified(s.users[b.student]) && verified(s.users[b.instructor]), "Os participantes precisam de identidade aprovada pela administração.");
@@ -496,8 +479,11 @@ function execute(
           approved(s.users[b.instructor], now),
           "Instrutor sem autorização válida.",
         );
-        Object.assign(b, { paid: true, status: "confirmado", paidAt: now });
+        const lessons=b.groupId?Object.values(s.bookings).filter(x=>x.groupId===b.groupId && ["solicitado","aguardando_pagamento"].includes(x.status)):[b];
+        check(lessons.every(x=>x.status === "aguardando_pagamento" && x.start>now),"Aguarde o aceite das duas aulas antes de simular o pagamento conjunto.");
+        for(const lesson of lessons){Object.assign(lesson,{paid:true,status:"confirmado",paidAt:now});if(lesson.id!==b.id)extraNotificationBookings.push(lesson.id);}
         break;
+      }
       case "cancel": {
         participant();
         check(
@@ -802,6 +788,8 @@ function execute(
     }
   }
   bookingNotifications(s, actor, op, input, id, now);
+  if(op === "book" && s.bookings[id+"_2"])bookingNotifications(s,actor,op,input,id+"_2",now);
+  for(const booking of extraNotificationBookings)bookingNotifications(s,actor,op,{booking},id+"_"+booking,now);
   if (!["message", "readNotification","readMessages"].includes(op))
     s.audit.push({ id, by: actor.uid, op, at: now });
   check(
