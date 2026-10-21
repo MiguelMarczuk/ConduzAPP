@@ -51,6 +51,8 @@ export type Booking = {
   lessonNumber?:number;
   lessonCount?:number;
   groupPrice?:number;
+  startCodeRequired?:boolean;
+  startConfirmation?:{status:string;code?:string;attempts?:number;availableAt:number;expiresAt:number;confirmedAt?:number;confirmedBy?:string};
   payoutEligible: boolean;
   studentConfirmed?: boolean;
   ratings?: Record<string, number>;
@@ -77,6 +79,9 @@ export type Ticket = {
   decision?: string;
 };
 export type State = {
+  demo?:{scope:string;clockOffset?:number};
+  demoClockActive?:boolean;
+  operationError?:string;
   unreadCount?:number;
   me: Profile | null;
   users: Record<string, Profile>;
@@ -185,6 +190,7 @@ export function Session({ children }: { children: ReactNode }) {
       if (auth.currentUser?.uid !== uid) return false;
       setState(r.data);
       setNotice("Alteração salva.");
+      if(r.data.operationError){setNotice("");setError(r.data.operationError);return false;}
       return true;
     } catch (e: unknown) {
       if (auth.currentUser?.uid !== uid) return false;

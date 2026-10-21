@@ -34,6 +34,7 @@ import { UI } from "@/constants/theme";
 import { panelStyles as s } from "@/constants/panel-styles";
 import {IdentityPanel,IdentityAdmin} from "@/components/identity-panel";
 import {AddressForm} from "@/components/address-form";
+import {StartConfirmation} from "@/components/start-confirmation";
 import {emptyAddress} from "@/lib/cep";
 import {homeTab,bookingFilters,matchesBooking,instructorList} from "@/lib/presentation";
 const labels: Record<string, string> = {
@@ -202,6 +203,7 @@ export default function Painel() {
           <Text style={s.error}>{api.error}</Text>
         </View>
       )}
+      {api.state?.demoClockActive && <View style={s.notice}><Text>Relógio do ensaio ativo · {dateTime(api.state.now)} · dados fictícios</Text>{me.role==='admin'&&<Button title="Restaurar relógio do ensaio" variant="secondary" onPress={async()=>{if(await api.run('setDemoClock',{stage:'reset'}))await api.refresh();}}/>}</View>}
       {!!api.notice && (
         <TouchableOpacity onPress={api.clear} style={s.notice}>
           <Text style={s.link}>{api.notice}</Text>
@@ -1033,6 +1035,7 @@ function BookingCard({ booking: b }: { booking: Booking }) {
       />
       {expand && (
         <View style={s.gap}>
+          <StartConfirmation booking={b}/>
           {teacher && b.status === "solicitado" && (
             <Action
               title="Aceitar solicitação"

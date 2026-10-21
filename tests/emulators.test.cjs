@@ -196,6 +196,24 @@ test("duas aulas: aceite e pagamento simulado conjunto preservam acompanhamento 
  r=await call('aluno','pay',{booking:lessons[0].id});assert.ok(Object.values(r.result.bookings).every(b=>b.paid&&b.duration===60));
  r=await call('aluno','cancel',{booking:lessons[0].id});assert.equal(r.result.bookings[lessons[0].id].refund,8500);assert.equal(r.result.bookings[lessons[1].id].status,'confirmado');
 });
+test("código de início é privado e tentativas inválidas persistem na transação",async()=>{
+ let r=await call('aluno','book',{instructor:users.instrutor.uid,start});const id=Object.keys(r.result.bookings)[0];await call('instrutor','accept',{booking:id});await call('aluno','pay',{booking:id});
+ const s=(await stateRef.get()).data();s.bookings[id].start=Date.now()-60000;await stateRef.set(s);
+ r=await call('aluno','state');const code=r.result.bookings[id].startConfirmation.code;assert.ok(/^\d{8}$/.test(code));
+ for(const role of ['instrutor','admin']){const c=(await call(role,'state')).result.bookings[id].startConfirmation;assert.ok(!c.code&&!c.hash&&!c.secret&&!c.salt);}
+ assert.ok((await call('outro','confirmStart',{booking:id,code})).error);
+ r=await call('instrutor','confirmStart',{booking:id,code:'00000000'});assert.ok(r.result.operationError);assert.equal((await stateRef.get()).data().bookings[id].startConfirmation.attempts,1);
+ r=await call('instrutor','confirmStart',{booking:id,code});assert.equal(r.result.bookings[id].startConfirmation.status,'confirmado');
+ r=await call('instrutor','confirmStart',{booking:id,code});assert.equal(r.result.bookings[id].startConfirmation.status,'confirmado');
+ assert.ok((await call('aluno','setDemoClock',{booking:id,stage:'start'})).error);
+ assert.ok((await call('admin','setDemoClock',{booking:id,stage:'start'})).error);
+});
+test("código expirado não muda pagamento, falta ou cancelamento e bloqueia elegibilidade",async()=>{
+ let r=await call('aluno','book',{instructor:users.instrutor.uid,start});const id=Object.keys(r.result.bookings)[0];await call('instrutor','accept',{booking:id});await call('aluno','pay',{booking:id});
+ const s=(await stateRef.get()).data();s.bookings[id].start=Date.now()-11*60000;await stateRef.set(s);
+ r=await call('aluno','state');const b=r.result.bookings[id];assert.equal(b.startConfirmation.status,'expirado');assert.equal(b.status,'confirmado');assert.equal(b.paid,true);assert.equal(b.refund,undefined);assert.ok(!b.payoutEligible);
+ assert.ok((await call('instrutor','confirmStart',{booking:id,code:'00000000'})).error);
+});
 test("duas reservas concorrentes: exatamente uma é aceita na transação", async () => {
   const results = await Promise.all(
     ["aluno", "outro"].map((role) =>

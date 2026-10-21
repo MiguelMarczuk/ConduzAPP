@@ -10,7 +10,7 @@ if (
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { randomUUID } = require("node:crypto");
 const { execute, empty } = require("./domain");
-const { statePath } = require("./state-scope");
+const { statePath,effectiveNow } = require("./state-scope");
 let database;
 function getDatabase() {
   if (!database) {
@@ -41,14 +41,15 @@ exports.conduz = onCall({ cors: true, timeoutSeconds: 60 }, async (request) => {
     return await db.runTransaction(async (tx) => {
       const ref = db.doc(statePath(request.auth.token));
       const snap = await tx.get(ref);
+      const state=snap.data()||empty(),realNow=Date.now();
       const result = execute(
-        snap.data() || empty(),
+        state,
         actor,
         op,
         input,
-        Date.now(),
+        effectiveNow(state,request.auth.token,realNow),
         id,
-        trusted,
+        {...trusted,realNow,emulator:process.env.FUNCTIONS_EMULATOR === "true",demoScope:scope},
       );
       if (result.write) {
         tx.set(ref, result.state);

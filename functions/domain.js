@@ -2,6 +2,7 @@
 const { createHash } = require("node:crypto");
 const {verified, identityOperation, assertOperational} = require("./identity");
 const {address,formatAddress}=require("./address");
+const {updateStarts,projectBooking,confirmStart,setDemoClock}=require("./start-code");
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
 const fail = (message) => {
@@ -212,7 +213,7 @@ function view(state, actor, now) {
       ([, n]) => n.recipient === actor.uid,
     ),
   );
-  if (actor.admin) return { ...state, notifications, me, now };
+  if (actor.admin) return { ...state, bookings:Object.fromEntries(Object.entries(state.bookings).map(([id,b])=>[id,projectBooking(b,actor,now)])),notifications, me, now,demoClockActive:!!state.demo?.clockOffset };
   if (!verified(me)) return {me,users:{[me.id]:me},bookings:{},reviews:{},messages:[],conversations:{},notifications,tickets:Object.fromEntries(Object.entries(state.tickets).filter(([,t])=>t.owner===actor.uid)),audit:[],now};
   const bookings = Object.fromEntries(
     Object.entries(state.bookings).filter(([, b]) =>
@@ -269,7 +270,8 @@ function view(state, actor, now) {
   return {
     me,
     users,
-    bookings,
+    bookings:Object.fromEntries(Object.entries(bookings).map(([id,b])=>[id,projectBooking(b,actor,now)])),
+    demoClockActive:!!state.demo?.clockOffset,
     conversations: myConversations,
     notifications,
     reviews: Object.fromEntries(
@@ -308,13 +310,15 @@ function execute(
   const s = structuredClone(original || empty());
   s.conversations = conversations(s);
   s.notifications ||= {};
+  const startsChanged=updateStarts(s,now);
+  let operationError;
   const me = s.users[actor.uid];
   const extraNotificationBookings=[];
   const admin = () =>
     check(actor.admin === true, "Acesso exclusivo da administração.");
   const user = () => check(!!me, "Complete seu cadastro.");
   if (op === "state")
-    return { state: s, result: view(s, actor, now), write: false };
+    return { state: s, result: view(s, actor, now), write: startsChanged };
   if (op === "register") {
     check(!me, "Perfil já cadastrado.");
     check(["aluno", "instrutor"].includes(input.role), "Perfil inválido.");
@@ -360,7 +364,8 @@ function execute(
       participant();
       check(b.student === actor.uid, "Ação exclusiva do aluno.");
     };
-    if (!identityOperation(s, actor, op, input, now, id, trusted)) switch (op) {
+    if(op === "setDemoClock")setDemoClock(s,actor,input,now,trusted);
+    else if (!identityOperation(s, actor, op, input, now, id, trusted)) switch (op) {
       case "profile": {
         check(text(input.name).length >= 3, "Informe seu nome.");
         Object.assign(me, {
@@ -382,6 +387,11 @@ function execute(
         }
         break;
       }
+      case "confirmStart":
+        instructor();
+        if(b.startConfirmation?.status === "confirmado")return {state:s,result:view(s,actor,now),write:startsChanged};
+        operationError=confirmStart(b,actor,input,now);
+        break;
       case "credential":
         check(
           me.role === "instrutor" &&
@@ -455,7 +465,7 @@ function execute(
           validSlot(s,input.instructor,start,60,now);
           check(!Object.values(s.bookings).some(x=>x.student===actor.uid && active(x) && start<end(x) && start+HOUR>x.start),"Você já possui uma aula neste horário.");
           check(Number.isInteger(u.price)&&u.price>0,"Preço inválido.");
-          s.bookings[bookingId]={id:bookingId,student:actor.uid,instructor:input.instructor,start,duration:60,price:u.price,commission:Math.round(u.price*3/100),status:"solicitado",paid:false,paymentMode:"simulado",address:meetingAddress,location:formatAddress(meetingAddress),createdAt:now,ratings:{},payoutEligible:false,...(count===2?{groupId:id,lessonNumber:i+1,lessonCount:2,groupPrice:2*u.price}:{})};
+          s.bookings[bookingId]={id:bookingId,student:actor.uid,instructor:input.instructor,start,duration:60,price:u.price,commission:Math.round(u.price*3/100),status:"solicitado",paid:false,paymentMode:"simulado",address:meetingAddress,location:formatAddress(meetingAddress),createdAt:now,startCodeRequired:true,ratings:{},payoutEligible:false,...(count===2?{groupId:id,lessonNumber:i+1,lessonCount:2,groupPrice:2*u.price}:{})};
         }
         break;
       }
@@ -542,6 +552,7 @@ function execute(
             ),
             "Aluno já possui aula no novo horário.",
           );
+          delete b.startConfirmation;
           b.previousStart = b.start;
           b.start = b.proposal.start;
         }
@@ -566,6 +577,7 @@ function execute(
         break;
       case "eligibility":
         participant();
+        check(!b.startCodeRequired || b.startConfirmation?.status === "confirmado", "Início não confirmado. Elegibilidade bloqueada; encaminhe ao suporte para análise.");
         check(
           b.status === "concluido" &&
             b.paid &&
@@ -800,6 +812,6 @@ function execute(
     s.audit.length < 2000 && Object.keys(s.bookings).length < 300,
     "Limite do ambiente de demonstração atingido.",
   );
-  return { state: s, result: view(s, actor, now), write: true };
+  return { state: s, result: {...view(s, actor, now),...(operationError?{operationError}:{})}, write: true };
 }
 module.exports = { execute, empty, slots, validSlot, approved, end, HOUR, DAY };

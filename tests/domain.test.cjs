@@ -41,12 +41,15 @@ function booked() {
   return act(fixture(), actor, "book", { instructor: "teacher", start });
 }
 function paid() {
-  return act(
+  const result=act(
     act(booked(), teacher, "accept", { booking: "b1" }),
     actor,
     "pay",
     { booking: "b1" },
   );
+  // Cenário legado das regras financeiras; novos códigos têm suíte própria.
+  result.bookings.b1.startCodeRequired=false;
+  return result;
 }
 test("autenticação obrigatória e cadastro sem elevação de privilégio", () => {
   assert.throws(() => execute(empty(), {}, "state"), /Autenticação/);
