@@ -44,6 +44,7 @@ import {
   homeTab,
   bookingFilters,
   matchesBooking,
+  canReviewPeer,
   instructorList,
 } from "@/lib/presentation";
 const labels: Record<string, string> = {
@@ -124,6 +125,7 @@ export default function Painel() {
   const [tab, setTab] = useState(params.tab || "Início");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [messageTo, setMessageTo] = useState(params.to);
+  const [participantId, setParticipantId] = useState<string | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [selected, setSelected] = useState<string | null>(
     params.instructor || null,
@@ -132,7 +134,19 @@ export default function Painel() {
   const [searchKey, setSearchKey] = useState(0);
   useEffect(() => {
     scrollRef.current?.scrollTo({ y: 0, animated: false });
-  }, [tab, selected, showNotifications, api.state?.me?.identity?.status]);
+  }, [
+    tab,
+    selected,
+    participantId,
+    showNotifications,
+    api.state?.me?.identity?.status,
+  ]);
+  useEffect(() => setParticipantId(null), [api.user?.uid]);
+  const openChat = (to: string) => {
+    setParticipantId(null);
+    setMessageTo(to);
+    setTab("Mensagens");
+  };
   const me = api.state?.me;
   if (api.loading)
     return (
@@ -182,6 +196,7 @@ export default function Painel() {
               setSelected(null);
               setFavoritesOnly(false);
               setMessageTo(undefined);
+              setParticipantId(null);
               setShowNotifications(false);
               setSearchKey((k) => k + 1);
               scrollRef.current?.scrollTo({ y: 0, animated: false });
@@ -258,10 +273,12 @@ export default function Painel() {
         {showNotifications && (
           <Notifications
             goProfile={() => {
+              setParticipantId(null);
               setTab("Perfil");
               setShowNotifications(false);
             }}
             goBookings={() => {
+              setParticipantId(null);
               setTab("Agendamentos");
               setShowNotifications(false);
             }}
@@ -277,6 +294,12 @@ export default function Painel() {
           </View>
         ) : me.role === "admin" ? (
           <Admin tab={tab} />
+        ) : participantId ? (
+          <ParticipantProfile
+            uid={participantId}
+            goBack={() => setParticipantId(null)}
+            onChat={openChat}
+          />
         ) : (
           <>
             {tab === "Início" &&
@@ -286,22 +309,29 @@ export default function Painel() {
                   initialFavorites={favoritesOnly}
                   selected={selected}
                   select={setSelected}
-                  onChat={(to) => {
-                    setMessageTo(to);
-                    setTab("Mensagens");
-                  }}
+                  onChat={openChat}
+                  onProfile={setParticipantId}
                 />
               ) : (
-                <InstructorHome goBookings={() => setTab("Agendamentos")} />
+                <InstructorHome
+                  goBookings={() => setTab("Agendamentos")}
+                  onProfile={setParticipantId}
+                />
               ))}
-            {tab === "Agendamentos" && <Bookings />}
+            {tab === "Agendamentos" && (
+              <Bookings onProfile={setParticipantId} />
+            )}
             {tab === "Avaliações" && (
               <ReviewsPage goBack={() => setTab("Perfil")} />
             )}
             {tab === "Mensagens" && (
               <Messages
-                key={me.id}
+                key={`${me.id}:${messageTo || ""}`}
                 initialTo={messageTo}
+                onProfile={(id) => {
+                  setMessageTo(id);
+                  setParticipantId(id);
+                }}
                 onOpen={() =>
                   scrollRef.current?.scrollTo({ y: 0, animated: false })
                 }
@@ -344,6 +374,7 @@ export default function Painel() {
                 api.clear();
                 setTab(t);
                 setSelected(null);
+                setParticipantId(null);
                 setFavoritesOnly(false);
                 setShowNotifications(false);
               }}
@@ -482,11 +513,13 @@ function Search({
   selected,
   select,
   onChat,
+  onProfile,
   initialFavorites = false,
 }: {
   selected: string | null;
   select: (id: string | null) => void;
   onChat: (id: string) => void;
+  onProfile: (id: string) => void;
   initialFavorites?: boolean;
 }) {
   const { state, run, busy } = useSession();
@@ -615,6 +648,11 @@ function Search({
             </TouchableOpacity>
           </View>
         </Card>
+        <Button
+          title="Perfil e avaliações do instrutor"
+          variant="secondary"
+          onPress={() => onProfile(u.id)}
+        />
         <Card style={s.sectionCard}>
           <View style={s.row}>
             {[1, 2].map((count) => (
@@ -903,7 +941,13 @@ function Search({
     </View>
   );
 }
-function InstructorHome({ goBookings }: { goBookings: () => void }) {
+function InstructorHome({
+  goBookings,
+  onProfile,
+}: {
+  goBookings: () => void;
+  onProfile: (id: string) => void;
+}) {
   const { state } = useSession();
   const me = state!.me!;
   const list = Object.values(state!.bookings);
@@ -961,6 +1005,35 @@ function InstructorHome({ goBookings }: { goBookings: () => void }) {
           ))
         ) : (
           <Text style={s.muted}>Nenhuma próxima aula confirmada.</Text>
+        )}
+      </Card>
+      <Card style={s.gap}>
+        <Text style={s.cardTitle}>Meus alunos</Text>
+        <Text style={s.small}>
+          Abra um perfil para conversar ou avaliar uma aula concluída.
+        </Text>
+        {Object.values(state!.users)
+          .filter((u) => u.role === "aluno")
+          .map((u) => (
+            <TouchableOpacity
+              key={u.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Ver perfil de ${u.name}`}
+              style={s.conversation}
+              onPress={() => onProfile(u.id)}
+            >
+              <Avatar foto={u.photoPath} nome={u.name} size={44} />
+              <View style={s.flex}>
+                <Text style={s.cardTitle}>{u.name}</Text>
+                <Text style={s.link}>Ver perfil</Text>
+              </View>
+              <Icon name="chevron" size={16} />
+            </TouchableOpacity>
+          ))}
+        {!Object.values(state!.users).some((u) => u.role === "aluno") && (
+          <Text style={s.muted}>
+            Seus alunos aparecerão após uma solicitação ou conversa.
+          </Text>
         )}
       </Card>
       <Card style={s.gapSmall}>
@@ -1083,11 +1156,12 @@ function Availability() {
     </Card>
   );
 }
-function Bookings() {
+function Bookings({ onProfile }: { onProfile?: (id: string) => void }) {
   const { state } = useSession();
   const [filter, setFilter] = useState("Todas");
   const all = Object.values(state!.bookings).sort((a, b) => b.start - a.start);
-  const list = all.filter((b) => matchesBooking(b, filter));
+  const list = all.filter((b) => matchesBooking(b, filter, state!.now));
+  if (filter === "Códigos disponíveis") list.sort((a, b) => a.start - b.start);
   return (
     <View style={s.gap}>
       <Heading
@@ -1104,27 +1178,42 @@ function Bookings() {
             onPress={() => setFilter(f)}
           >
             <Text style={filter === f ? s.white : s.link}>
-              {f} ({all.filter((b) => matchesBooking(b, f)).length})
+              {f} ({all.filter((b) => matchesBooking(b, f, state!.now)).length})
             </Text>
           </TouchableOpacity>
         ))}
       </View>
       {list.map((b) => (
-        <BookingCard key={b.id} booking={b} />
+        <BookingCard
+          key={b.id}
+          booking={b}
+          onProfile={onProfile}
+          showCode={filter === "Códigos disponíveis"}
+        />
       ))}
       {!list.length && (
         <Card>
           <Text>
-            {all.length
-              ? "Nenhuma aula neste filtro."
-              : "Você ainda não tem aulas agendadas."}
+            {filter === "Códigos disponíveis"
+              ? "Nenhuma aula com código disponível agora. O código fica disponível do início da aula até dez minutos depois, enquanto aguarda confirmação."
+              : all.length
+                ? "Nenhuma aula neste filtro."
+                : "Você ainda não tem aulas agendadas."}
           </Text>
         </Card>
       )}
     </View>
   );
 }
-function BookingCard({ booking: b }: { booking: Booking }) {
+function BookingCard({
+  booking: b,
+  onProfile,
+  showCode = false,
+}: {
+  booking: Booking;
+  onProfile?: (id: string) => void;
+  showCode?: boolean;
+}) {
   const router = useRouter();
   const { state, run } = useSession();
   const me = state!.me!;
@@ -1141,10 +1230,13 @@ function BookingCard({ booking: b }: { booking: Booking }) {
       )
     : [b];
   const paymentTotal = groupPending.reduce((sum, x) => sum + x.price, 0);
-  const [expand, setExpand] = useState(false),
+  const [expand, setExpand] = useState(showCode),
     [reason, setReason] = useState(""),
     [newStart, setNewStart] = useState("");
   const other = state!.users[student ? b.instructor : b.student];
+  useEffect(() => {
+    if (showCode) setExpand(true);
+  }, [showCode]);
   return (
     <Card style={s.gap}>
       <View style={s.row}>
@@ -1160,6 +1252,13 @@ function BookingCard({ booking: b }: { booking: Booking }) {
           </Text>
         </View>
       </View>
+      {!!other && !!onProfile && (
+        <Button
+          title={`Ver perfil de ${other.name}`}
+          variant="secondary"
+          onPress={() => onProfile(other.id)}
+        />
+      )}
       <Badge
         title={labels[b.status] || b.status}
         tone={
@@ -1458,9 +1557,11 @@ function Evidence({ booking: b }: { booking: Booking }) {
 function Messages({
   initialTo,
   onOpen,
+  onProfile,
 }: {
   initialTo?: string;
   onOpen: () => void;
+  onProfile: (id: string) => void;
 }) {
   const { state, run, busy } = useSession();
   const me = state!.me!;
@@ -1534,33 +1635,42 @@ function Messages({
                   .filter((msg) => [msg.from, msg.to].includes(id))
                   .slice(-1)[0];
                 return (
-                  <TouchableOpacity
-                    key={id}
-                    accessibilityRole="button"
-                    accessibilityLabel={"Conversa com " + name}
-                    accessibilityState={{ selected: to === id }}
-                    style={[s.conversation, to === id && s.conversationActive]}
-                    onPress={() => setTo(id)}
-                  >
-                    <Avatar
-                      foto={state!.users[id]?.photoPath}
-                      nome={name}
-                      size={48}
-                    />
-                    <View style={s.conversationInfo}>
-                      <Text style={s.conversationName}>{name}</Text>
-                      <Text numberOfLines={1} style={s.small}>
-                        {last
-                          ? (last.from === me.id ? "Você: " : "") + last.text
-                          : "Comece a conversa sobre sua próxima aula."}
-                      </Text>
-                      <Badge
-                        title={tag}
-                        tone={tag === "AGENDADO" ? "success" : "neutral"}
+                  <View key={id} style={s.gapSmall}>
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel={"Conversa com " + name}
+                      accessibilityState={{ selected: to === id }}
+                      style={[
+                        s.conversation,
+                        to === id && s.conversationActive,
+                      ]}
+                      onPress={() => setTo(id)}
+                    >
+                      <Avatar
+                        foto={state!.users[id]?.photoPath}
+                        nome={name}
+                        size={48}
                       />
-                    </View>
-                    <Icon name="chevron" size={16} />
-                  </TouchableOpacity>
+                      <View style={s.conversationInfo}>
+                        <Text style={s.conversationName}>{name}</Text>
+                        <Text numberOfLines={1} style={s.small}>
+                          {last
+                            ? (last.from === me.id ? "Você: " : "") + last.text
+                            : "Comece a conversa sobre sua próxima aula."}
+                        </Text>
+                        <Badge
+                          title={tag}
+                          tone={tag === "AGENDADO" ? "success" : "neutral"}
+                        />
+                      </View>
+                      <Icon name="chevron" size={16} />
+                    </TouchableOpacity>
+                    <Button
+                      title={`Ver perfil de ${name}`}
+                      variant="secondary"
+                      onPress={() => onProfile(id)}
+                    />
+                  </View>
                 );
               })}
           </View>
@@ -1577,8 +1687,9 @@ function Messages({
                 Sua próxima aula começa com uma conversa
               </Text>
               <Text style={s.muted}>
-                Abra o perfil de um instrutor aprovado e toque em Conversar com
-                o instrutor.
+                {me.role === "instrutor"
+                  ? "Abra o perfil de um aluno vinculado às suas aulas para conversar. Alunos também podem iniciar uma conversa com você."
+                  : "Abra o perfil de um instrutor aprovado e toque em Conversar com o instrutor."}
               </Text>
             </Card>
           )}
@@ -1602,6 +1713,11 @@ function Messages({
               <Text style={s.small}>Conversa privada entre participantes</Text>
             </View>
           </View>
+          <Button
+            title={`Ver perfil de ${state!.users[to]?.name || "participante"}`}
+            variant="secondary"
+            onPress={() => onProfile(to)}
+          />
           {state!.messages
             .filter((m) => [m.from, m.to].includes(to))
             .map((m) => (
@@ -1642,6 +1758,119 @@ function Messages({
           />
         </Card>
       )}
+    </View>
+  );
+}
+function ParticipantProfile({
+  uid,
+  goBack,
+  onChat,
+}: {
+  uid: string;
+  goBack: () => void;
+  onChat: (id: string) => void;
+}) {
+  const { state, run, busy } = useSession();
+  const [selectedLesson, setSelectedLesson] = useState("");
+  const me = state!.me!;
+  // Only profiles already projected by the backend are available here.
+  const peer = state!.users[uid];
+  const pending = Object.values(state!.bookings)
+    .filter((b) => canReviewPeer(b, me.id, uid, state!.now))
+    .sort((a, b) => b.start - a.start);
+  const lesson = pending.find((b) => b.id === selectedLesson) || pending[0];
+  if (!peer || peer.id === me.id || !["aluno", "instrutor"].includes(peer.role))
+    return (
+      <View style={s.gap}>
+        <Button title="Voltar" variant="secondary" onPress={goBack} />
+        <Text>Perfil indisponível para sua conta.</Text>
+      </View>
+    );
+  return (
+    <View style={s.gap}>
+      <Button title="Voltar" variant="secondary" onPress={goBack} />
+      <Heading
+        title={
+          peer.role === "instrutor" ? "Perfil do instrutor" : "Perfil do aluno"
+        }
+      />
+      <Card style={s.gap}>
+        <View style={s.row}>
+          <Avatar foto={peer.photoPath} nome={peer.name} size={72} />
+          <View style={s.flex}>
+            <Text style={s.cardTitle}>{peer.name}</Text>
+            <Text style={s.muted}>
+              {peer.role === "instrutor" ? "Instrutor" : "Aluno"}
+              {peer.region ? ` · ${peer.region}` : ""}
+            </Text>
+          </View>
+        </View>
+        {!!peer.bio && <Text>{peer.bio}</Text>}
+        {peer.role === "instrutor" && (
+          <>
+            {!!peer.specialty && <Text style={s.muted}>{peer.specialty}</Text>}
+            {!!peer.car && (
+              <Text style={s.muted}>
+                {peer.car}
+                {peer.transmission ? ` · ${peer.transmission}` : ""}
+              </Text>
+            )}
+          </>
+        )}
+        <Button
+          title="Enviar mensagem"
+          disabled={busy}
+          onPress={async () => {
+            if (await run("openConversation", { to: uid })) onChat(uid);
+          }}
+        />
+      </Card>
+      <Card style={s.gap}>
+        <Text style={s.cardTitle}>
+          {peer.role === "instrutor" ? "Avaliar instrutor" : "Avaliar aluno"}
+        </Text>
+        <Text style={s.muted}>
+          Uma avaliação por participante em cada aula concluída, paga e com
+          horário final encerrado.
+        </Text>
+        {pending.length > 1 && (
+          <View style={s.row}>
+            {pending.map((b) => (
+              <TouchableOpacity
+                key={b.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Avaliar aula de ${dateTime(b.start)}`}
+                accessibilityState={{ selected: lesson?.id === b.id }}
+                style={[s.chip, lesson?.id === b.id && s.slotActive]}
+                onPress={() => setSelectedLesson(b.id)}
+              >
+                <Text style={lesson?.id === b.id ? s.white : s.link}>
+                  {dateTime(b.start)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+        {lesson ? (
+          <ReviewForm key={lesson.id} booking={lesson} />
+        ) : (
+          <Text style={s.muted}>
+            Nenhuma aula pendente de avaliação com este participante.
+          </Text>
+        )}
+      </Card>
+      {peer.role === "aluno" && (
+        <Text style={s.small}>
+          As avaliações de alunos são privadas. Aqui você vê apenas as
+          avaliações que você escreveu para este aluno.
+        </Text>
+      )}
+      <Reviews
+        uid={uid}
+        title={
+          peer.role === "aluno" ? "Suas avaliações deste aluno" : undefined
+        }
+      />
     </View>
   );
 }
@@ -1713,14 +1942,14 @@ function ReviewsPage({ goBack }: { goBack: () => void }) {
     </View>
   );
 }
-function Reviews({ uid }: { uid: string }) {
+function Reviews({ uid, title }: { uid: string; title?: string }) {
   const { state } = useSession();
   const reviews = Object.values(state!.reviews).filter((r) => r.to === uid);
   return (
     <View style={s.gap}>
       <View style={s.sectionHeading}>
         <Icon name="star" />
-        <Text style={s.cardTitle}>Avaliações recebidas</Text>
+        <Text style={s.cardTitle}>{title || "Avaliações recebidas"}</Text>
       </View>
       <RatingSummary uid={uid} />
       {!reviews.length && (

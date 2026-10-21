@@ -161,6 +161,74 @@ test("Function recusa acesso anônimo e elevação de privilégio", async () => 
   assert.match(r.error.message, /administração/);
 });
 
+test("perfil vinculado: instrutor inicia chat, ambos avaliam aula elegível e terceiro não acessa aluno", async () => {
+  const student = users.aluno.uid,
+    teacher = users.instrutor.uid;
+  assert.ok(
+    (await call("instrutor", "openConversation", { to: student })).error,
+  );
+  const booked = await call("aluno", "book", { instructor: teacher, start });
+  assert.ok(booked.result, JSON.stringify(booked));
+  const b = Object.values(booked.result.bookings)[0];
+  let r = await call("instrutor", "openConversation", { to: student });
+  assert.ok(r.result, JSON.stringify(r));
+  assert.equal(r.result.users[student].identity, undefined);
+  assert.ok(
+    (
+      await call("instrutor", "message", {
+        to: student,
+        text: "Mensagem pelo perfil vinculado",
+        requestId: "linked-profile-message",
+      })
+    ).result,
+  );
+  r = await call("aluno", "state");
+  assert.equal(r.result.messages[0].text, "Mensagem pelo perfil vinculado");
+  const saved = (await stateRef.get()).data();
+  Object.assign(saved.bookings[b.id], {
+    start: now - 2 * HOUR,
+    paid: true,
+    status: "concluido",
+    startCodeRequired: false,
+  });
+  await stateRef.set(saved);
+  assert.ok(
+    (
+      await call("aluno", "review", {
+        booking: b.id,
+        rating: 5,
+        comment: "Avaliação pública do instrutor",
+      })
+    ).result,
+  );
+  assert.ok(
+    (
+      await call("instrutor", "review", {
+        booking: b.id,
+        rating: 4,
+        comment: "Avaliação privada do aluno",
+      })
+    ).result,
+  );
+  assert.ok(
+    (await call("instrutor", "review", { booking: b.id, rating: 5 })).error,
+  );
+  r = await call("outro", "state");
+  assert.equal(r.result.users[student], undefined);
+  assert.equal(r.result.messages.length, 0);
+  const reviews = Object.values(r.result.reviews);
+  assert.equal(reviews.length, 1);
+  assert.equal(reviews[0].to, teacher);
+  assert.equal(reviews[0].from, undefined);
+  assert.ok(
+    (await call("instrutor", "openConversation", { to: users.outro.uid }))
+      .error,
+  );
+  assert.ok(
+    (await call("outro", "review", { booking: b.id, rating: 1 })).error,
+  );
+});
+
 test("foto e documento: upload, persistência, análise e isolamento real no Storage", async () => {
   const uid = users.aluno.uid;
   const owner = env

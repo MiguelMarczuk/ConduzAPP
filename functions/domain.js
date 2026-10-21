@@ -858,8 +858,14 @@ function execute(
           break;
         }
         case "openConversation": {
+          const existing = Object.values(s.conversations).some(
+            (c) =>
+              (c.student === actor.uid && c.instructor === input.to) ||
+              (c.instructor === actor.uid && c.student === input.to),
+          );
           check(
-            me.role === "aluno" && approved(s.users[input.to], now),
+            existing ||
+              (me.role === "aluno" && approved(s.users[input.to], now)),
             "Escolha um instrutor aprovado e disponível para conversar.",
           );
           const c = pair(s, actor.uid, input.to);

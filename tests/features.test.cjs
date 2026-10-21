@@ -619,6 +619,76 @@ test("filtros refletem estados reais e disputa sem inventar status", () => {
   assert.equal(ux.homeTab("admin"), "Início");
   assert.equal(ux.homeTab("aluno", true), "Perfil");
 });
+
+test("códigos disponíveis usa janela do servidor e não exige expor segredo ao instrutor", () => {
+  const b = {
+    status: "confirmado",
+    paid: true,
+    start: now,
+    startCodeRequired: true,
+    startConfirmation: { status: "disponivel", expiresAt: now + 10 * 60000 },
+  };
+  const matches = (value, time) =>
+    ux.matchesBooking(value, "Códigos disponíveis", time);
+  assert.equal(matches(b, now - 1), false);
+  assert.equal(matches(b, now), true);
+  assert.equal(matches(b, now + 10 * 60000), true);
+  assert.equal(matches(b, now + 10 * 60000 + 1), false);
+  assert.equal(matches(b, undefined), false);
+  for (const change of [
+    { paid: false },
+    { startCodeRequired: false },
+    ...[
+      "cancelado",
+      "concluido",
+      "falta_aluno",
+      "solicitado",
+      "aguardando_pagamento",
+    ].map((status) => ({ status })),
+    ...["confirmado", "expirado", "bloqueado"].map((status) => ({
+      startConfirmation: { ...b.startConfirmation, status },
+    })),
+  ])
+    assert.equal(matches({ ...b, ...change }, now), false);
+  assert.equal(
+    matches(
+      {
+        ...b,
+        startConfirmation: { ...b.startConfirmation, expiresAt: now - 1 },
+      },
+      now,
+    ),
+    false,
+  );
+  assert.ok(ux.bookingFilters.includes("Códigos disponíveis"));
+});
+
+test("avaliação pelo perfil respeita par, conclusão, pagamento, término e autoria única", () => {
+  const b = {
+    student: "s",
+    instructor: "t",
+    status: "concluido",
+    paid: true,
+    start: now - HOUR,
+    duration: 60,
+  };
+  assert.ok(ux.canReviewPeer(b, "s", "t", now));
+  assert.ok(ux.canReviewPeer(b, "t", "s", now));
+  for (const [viewer, peer] of [
+    ["o", "t"],
+    ["t", "o"],
+    ["s", "s"],
+  ])
+    assert.equal(ux.canReviewPeer(b, viewer, peer, now), false);
+  assert.equal(ux.canReviewPeer(b, "s", "t", now - 1), false);
+  for (const change of [
+    { paid: false },
+    { status: "confirmado" },
+    { ratings: { s: 5 } },
+  ])
+    assert.equal(ux.canReviewPeer({ ...b, ...change }, "s", "t", now), false);
+  assert.ok(ux.canReviewPeer({ ...b, ratings: { s: 5 } }, "t", "s", now));
+});
 test("lista completa exclui inaptos; destaque não inventa profissionais", () => {
   const users = [
     { id: "a", role: "instrutor", eligible: true, name: "A", featured: true },

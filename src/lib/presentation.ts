@@ -56,6 +56,7 @@ export const homeTab = (_role: string, pending = false) =>
   pending ? "Perfil" : "Início";
 export const bookingFilters = [
   "Todas",
+  "Códigos disponíveis",
   "Pendentes",
   "Aguardando pagamento",
   "Confirmadas",
@@ -65,10 +66,29 @@ export const bookingFilters = [
   "Em disputa",
 ];
 export function matchesBooking(
-  b: { status: string; disputeOpen?: boolean },
+  b: {
+    status: string;
+    disputeOpen?: boolean;
+    paid?: boolean;
+    start?: number;
+    startCodeRequired?: boolean;
+    startConfirmation?: { status: string; expiresAt: number };
+  },
   filter: string,
+  now?: number,
 ): boolean {
   if (filter === "Todas") return true;
+  if (filter === "Códigos disponíveis")
+    return !!(
+      now !== undefined &&
+      b.start !== undefined &&
+      b.paid &&
+      b.status === "confirmado" &&
+      b.startCodeRequired &&
+      b.startConfirmation?.status === "disponivel" &&
+      now >= b.start &&
+      now <= Math.min(b.startConfirmation.expiresAt, b.start + 10 * 60000)
+    );
   if (filter === "Em disputa") return !!b.disputeOpen;
   if (filter === "Faltas") return b.status.startsWith("falta_");
   return (
@@ -82,6 +102,30 @@ export function matchesBooking(
         Canceladas: "cancelado",
       } as Record<string, string>
     )[filter]
+  );
+}
+export function canReviewPeer(
+  b: {
+    student: string;
+    instructor: string;
+    status: string;
+    paid: boolean;
+    start: number;
+    duration: number;
+    ratings?: Record<string, number>;
+  },
+  viewer: string,
+  peer: string,
+  now: number,
+): boolean {
+  return (
+    viewer !== peer &&
+    ((b.student === viewer && b.instructor === peer) ||
+      (b.instructor === viewer && b.student === peer)) &&
+    b.status === "concluido" &&
+    b.paid &&
+    now >= b.start + b.duration * 60000 &&
+    !b.ratings?.[viewer]
   );
 }
 export function instructorList<

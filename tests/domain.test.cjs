@@ -61,6 +61,41 @@ const act = (s, a, op, input = {}, time = now, id = "b1") =>
     time,
     id,
   ).state;
+
+test("instrutor abre conversa pelo perfil apenas com aluno já vinculado, sem vazar dados privados", () => {
+  assert.throws(
+    () => act(fixture(), teacher, "openConversation", { to: "student" }),
+    /aprovado/,
+  );
+  let s = act(fixture(), actor, "book", { instructor: "teacher", start });
+  s.users.student.identity.documentPath = "private/document";
+  s = act(s, teacher, "openConversation", { to: "student" });
+  const id = Object.keys(s.conversations)[0];
+  s = act(s, teacher, "openConversation", { to: "student" });
+  assert.deepEqual(Object.keys(s.conversations), [id]);
+  s = act(s, teacher, "message", {
+    to: "student",
+    text: "Olá, aluno vinculado",
+    requestId: "profile-first-message",
+  });
+  const received = execute(s, actor, "state", {}, now).result;
+  assert.equal(received.messages[0].text, "Olá, aluno vinculado");
+  assert.equal(
+    execute(s, teacher, "state", {}, now).result.users.student.identity,
+    undefined,
+  );
+  const outsider = execute(s, { uid: "other" }, "state", {}, now).result;
+  assert.equal(outsider.users.student, undefined);
+  assert.deepEqual(outsider.messages, []);
+  assert.throws(
+    () => act(s, teacher, "openConversation", { to: "other" }),
+    /aprovado/,
+  );
+  assert.throws(
+    () => act(s, { uid: "other" }, "openConversation", { to: "student" }),
+    /aprovado/,
+  );
+});
 function booked() {
   return act(fixture(), actor, "book", { instructor: "teacher", start });
 }
