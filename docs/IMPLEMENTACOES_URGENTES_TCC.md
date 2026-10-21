@@ -20,3 +20,14 @@ Conferência manual parcial: login vazio, foto após novo login, abertura da gal
 ## Decisões financeiras preservadas
 
 Não aplicar perda de 100% faltando uma hora, multas ou transferências. Permanecem os percentuais existentes. Para duas aulas relacionadas, cada aula continuará sendo uma contratação de 60 minutos com preço individual e política existente; não será criada política de pacote, desconto ou penalidade nova.
+
+## Etapa B — Comunicação, navegação, busca, filtros e CEP
+
+- Contador de recebidas não lidas calculado no backend. Leitura por IDs da conversa aberta, somente pelo destinatário, com horário persistente e idempotência. Conversa ocupa sua própria área e volta à lista; o app solicita leitura somente em primeiro plano. Reenvio continua com o identificador idempotente existente.
+- Marca acessível retorna ao início apropriado ao perfil e limpa seleções locais sem alterar autenticação. Conta pendente retorna à regularização.
+- Lista completa separada da busca de aulas avulsas. Apenas perfis com `eligible` calculado pelo servidor aparecem como aptos; inclui identidade, foto, credenciamento, validade e suspensão. Destaques dependem de flag real; se não houver destaque, o título é “Instrutores disponíveis”, sem dados inventados.
+- Filtros usam status reais; disputa é a flag `disputeOpen`, não um novo status. Contagens derivadas somente das reservas autorizadas recebidas pelo usuário.
+- Endereço estruturado validado no backend: rua, número (incluindo s/n), bairro, cidade e UF. CEP opcional. Local de reservas antigas continua legível. Novas solicitações exigem os campos estruturados.
+- ViaCEP usa oito dígitos e JSON, conforme [documentação oficial](https://viacep.com.br/). Timeout, CEP ausente e erro de rede preservam preenchimento manual; resposta antiga não sobrescreve edições feitas durante a consulta.
+
+Validação: **42 unitários, 18 integrações/autorização e TypeScript aprovados**. Inclui contagem/leitura persistente, terceiro recusado, idempotência, busca elegível, filtros, endereço, CEP válido/inexistente/offline com respostas controladas. Teste de `homeTab` é unitário; navegação real será conferida no navegador, não confundida com teste de interface.

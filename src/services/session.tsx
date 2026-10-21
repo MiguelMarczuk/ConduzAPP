@@ -32,6 +32,7 @@ export type Profile = {
   approvalReason?: string;
   photoPath?: string | null;
   eligible?: boolean;
+  featured?: boolean;
   identity?: {status:string;photoPath?:string;documentPath?:string;submittedAt?:number;reviewedAt?:number;reviewedBy?:string;reason?:string};
 };
 export type Booking = {
@@ -45,6 +46,7 @@ export type Booking = {
   status: string;
   paid: boolean;
   location: string;
+  address?: {cep:string;street:string;number:string;neighborhood:string;city:string;uf:string};
   payoutEligible: boolean;
   studentConfirmed?: boolean;
   ratings?: Record<string, number>;
@@ -71,6 +73,7 @@ export type Ticket = {
   decision?: string;
 };
 export type State = {
+  unreadCount?:number;
   me: Profile | null;
   users: Record<string, Profile>;
   bookings: Record<string, Booking>;
@@ -102,6 +105,7 @@ export type State = {
     to: string;
     text: string;
     at: number;
+    readAt?:number;
   }[];
   tickets: Record<string, Ticket>;
   audit: { id: string; by: string; op: string; at: number }[];

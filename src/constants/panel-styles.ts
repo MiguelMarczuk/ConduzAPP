@@ -164,6 +164,8 @@ export const panelStyles = StyleSheet.create({
     borderRadius: UI.radius.pill,
   },
   navIconActive: { backgroundColor: c.primarySoft },
+  unreadBadge: {position:"absolute",right:0,top:-4,minWidth:18,height:18,borderRadius:9,backgroundColor:c.dangerText,alignItems:"center",justifyContent:"center",paddingHorizontal:3},
+  unreadText: {fontSize:10,lineHeight:16,fontWeight:"700",color:"white"},
   tabLabel: { fontSize: 11, lineHeight: 17, color: c.textSecondary },
   tabLabelActive: { color: c.primary, fontWeight: "700" },
   errorBox: { padding: 12, backgroundColor: c.dangerSoft },

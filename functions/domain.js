@@ -1,6 +1,7 @@
 "use strict";
 const { createHash } = require("node:crypto");
 const {verified, identityOperation, assertOperational} = require("./identity");
+const {address,formatAddress}=require("./address");
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
 const fail = (message) => {
@@ -244,6 +245,7 @@ function view(state, actor, now) {
         approval,
         credentialExpires,
         photoPath,
+        featured,
       } = u;
       users[id] = {
         id,
@@ -259,6 +261,7 @@ function view(state, actor, now) {
         credentialExpires: credentialExpires || 0,
         photoPath,
         eligible: approved(u, now),
+        featured: featured === true,
         slots: approved(u, now) ? slots(state, id, now) : [],
       };
     }
@@ -284,6 +287,7 @@ function view(state, actor, now) {
       }),
     ),
     messages: state.messages.filter((m) => [m.from, m.to].includes(actor.uid)),
+    unreadCount: state.messages.filter(m=>m.to===actor.uid && !m.readAt).length,
     tickets: Object.fromEntries(
       Object.entries(state.tickets).filter(([, t]) => t.owner === actor.uid),
     ),
@@ -438,6 +442,7 @@ function execute(
           : [...(me.favorites || []), input.instructor];
         break;
       case "book": {
+        const meetingAddress=address(input.address);
         check(me.role === "aluno", "Ação exclusiva do aluno.");
         validSlot(s, input.instructor, input.start, 60, now);
         check(
@@ -463,7 +468,8 @@ function execute(
           status: "solicitado",
           paid: false,
           paymentMode: "simulado",
-          location: text(input.location, 300),
+          address:meetingAddress,
+          location:formatAddress(meetingAddress),
           createdAt: now,
           ratings: {},
           payoutEligible: false,
@@ -741,6 +747,11 @@ function execute(
         n.readAt ||= now;
         break;
       }
+      case "readMessages": {
+        check(Array.isArray(input.messages) && input.messages.length<=1500,"Mensagens inválidas.");
+        for(const messageId of input.messages){const m=s.messages.find(m=>m.id===messageId);check(m && m.to===actor.uid && m.from===input.to,"Mensagem de outro participante ou não recebida.");m.readAt ||= now;}
+        break;
+      }
       case "message": {
         check(
           s.users[input.to] &&
@@ -791,7 +802,7 @@ function execute(
     }
   }
   bookingNotifications(s, actor, op, input, id, now);
-  if (!["message", "readNotification"].includes(op))
+  if (!["message", "readNotification","readMessages"].includes(op))
     s.audit.push({ id, by: actor.uid, op, at: now });
   check(
     Buffer.byteLength(JSON.stringify(s), "utf8") < 850000,

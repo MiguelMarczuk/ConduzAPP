@@ -70,7 +70,7 @@ async function call(role, op, input = {}) {
         "Content-Type": "application/json",
         ...(role ? { Authorization: `Bearer ${users[role].token}` } : {}),
       },
-      body: JSON.stringify({ data: { op, input } }),
+      body: JSON.stringify({ data: { op, input:op === "book"?{address:{cep:"",street:"Rua Fictícia",number:"s/n",neighborhood:"Centro",city:"Niterói",uf:"RJ"},...input}:input } }),
     },
   );
   const body = await r.json();
@@ -172,6 +172,15 @@ test("backend recusa bytes falsos mesmo que MIME declare imagem",async()=>{
  const path=`profilePhotos/${scope}/${users.aluno.uid}/invalid.png`;
  await uploadBytes(ref(env.authenticatedContext(users.aluno.uid,{stateScope:scope}).storage('gs://demo-conduzapp.appspot.com'),path),Buffer.from('não é PNG'),{contentType:'image/png'});
  const r=await call('aluno','setPhoto',{path});assert.ok(r.error);assert.match(r.error.message,/Arquivo inválido/);
+});
+test("mensagens não lidas e endereço estruturado persistem com autorização",async()=>{
+ await call('aluno','message',{to:users.instrutor.uid,text:'Conversa fictícia',requestId:'new-unread-01'});
+ let r=await call('instrutor','state');assert.equal(r.result.unreadCount,1);const message=r.result.messages[0];
+ assert.ok((await call('outro','readMessages',{to:users.aluno.uid,messages:[message.id]})).error);
+ r=await call('instrutor','readMessages',{to:users.aluno.uid,messages:[message.id]});assert.equal(r.result.unreadCount,0);
+ assert.equal((await call('instrutor','state')).result.unreadCount,0);
+ r=await call('aluno','book',{instructor:users.instrutor.uid,start});const b=Object.values(r.result.bookings)[0];assert.equal(b.address.number,'s/n');assert.match(b.location,/Rua Fictícia/);
+ assert.ok((await call('aluno','book',{instructor:users.instrutor.uid,start:start+HOUR,address:{street:''}})).error);
 });
 test("duas reservas concorrentes: exatamente uma é aceita na transação", async () => {
   const results = await Promise.all(

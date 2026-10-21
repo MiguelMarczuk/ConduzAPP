@@ -36,7 +36,7 @@ function fixture() {
   return s;
 }
 const act = (s, a, op, input = {}, time = now, id = "b1") =>
-  execute(s, a, op, input, time, id).state;
+  execute(s, a, op, op === "book" ? {address:{cep:"",street:"Rua Fictícia",number:"s/n",neighborhood:"Centro",city:"Niterói",uf:"RJ"},...input}:input, time, id).state;
 function booked() {
   return act(fixture(), actor, "book", { instructor: "teacher", start });
 }

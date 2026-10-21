@@ -15,3 +15,16 @@ export function authFields(email:string,password:string,signup=false,name=""):st
   if(signup && password.length<6) return "A senha não atende aos requisitos mínimos de segurança.";
   return "";
 }
+export const homeTab = (_role:string,pending=false) => pending ? "Perfil" : "Início";
+export const bookingFilters = ["Todas","Pendentes","Aguardando pagamento","Confirmadas","Concluídas","Canceladas","Faltas","Em disputa"];
+export function matchesBooking(b:{status:string;disputeOpen?:boolean},filter:string):boolean {
+ if(filter==="Todas")return true;
+ if(filter==="Em disputa")return !!b.disputeOpen;
+ if(filter==="Faltas")return b.status.startsWith("falta_");
+ return b.status===({Pendentes:"solicitado","Aguardando pagamento":"aguardando_pagamento",Confirmadas:"confirmado",Concluídas:"concluido",Canceladas:"cancelado"} as Record<string,string>)[filter];
+}
+export function instructorList<T extends {role:string;eligible?:boolean;featured?:boolean;id:string;name:string;region?:string}>(users:T[],mode:string,query:string,favorites:string[]=[]):T[]{
+ const all=users.filter(u=>u.role==="instrutor"&&u.eligible===true);
+ const featured=all.filter(u=>u.featured);
+ return (mode==="avulsas"&&featured.length?featured:all).filter(u=>(mode!=="favoritos"||favorites.includes(u.id))&&(u.name+" "+(u.region||"")).toLowerCase().includes(query.trim().toLowerCase()));
+}

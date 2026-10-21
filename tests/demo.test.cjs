@@ -55,7 +55,7 @@ test("cenário histórico não permite forçar conclusão de reserva futura", ()
     s,
     student,
     "book",
-    { instructor: teacher.uid, start },
+    { instructor: teacher.uid, start,address:{cep:"",street:"Rua Fictícia",number:"s/n",neighborhood:"Centro",city:"Niterói",uf:"RJ"} },
     now,
     "futura",
   ).state;

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   Image,
   ScrollView,
   TouchableOpacity,
@@ -32,6 +33,9 @@ import { MenuRow } from "@/components/ui/menu-row";
 import { UI } from "@/constants/theme";
 import { panelStyles as s } from "@/constants/panel-styles";
 import {IdentityPanel,IdentityAdmin} from "@/components/identity-panel";
+import {AddressForm} from "@/components/address-form";
+import {emptyAddress} from "@/lib/cep";
+import {homeTab,bookingFilters,matchesBooking,instructorList} from "@/lib/presentation";
 const labels: Record<string, string> = {
   solicitado: "Solicitação enviada",
   aguardando_pagamento: "Aguardando pagamento",
@@ -115,6 +119,7 @@ export default function Painel() {
     params.instructor || null,
   );
   const scrollRef = useRef<ScrollView>(null);
+  const [searchKey,setSearchKey]=useState(0);
   useEffect(() => {
     scrollRef.current?.scrollTo({ y: 0, animated: false });
   }, [tab, selected, showNotifications]);
@@ -156,12 +161,12 @@ export default function Painel() {
     <SafeAreaView style={s.page}>
       <View style={s.top}>
         <View style={s.topInner}>
-          <View>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="ConduzAPP — início" onPress={()=>{api.clear();setTab(homeTab(me.role,identityPending));setSelected(null);setFavoritesOnly(false);setMessageTo(undefined);setShowNotifications(false);setSearchKey(k=>k+1);scrollRef.current?.scrollTo({y:0,animated:false});}}>
             <Text style={s.brand}>
               CONDUZ<Text style={s.brandAccent}> APP</Text>
             </Text>
             <Text style={s.demoLabel}>DEMONSTRAÇÃO · PAGAMENTOS SIMULADOS</Text>
-          </View>
+          </TouchableOpacity>
           <View style={s.headerActions}>
             <TouchableOpacity
               accessibilityRole="button"
@@ -221,7 +226,7 @@ export default function Painel() {
           <>
             {tab === "Início" &&
               (me.role === "aluno" ? (
-                <Search
+                <Search key={searchKey}
                   initialFavorites={favoritesOnly}
                   selected={selected}
                   select={setSelected}
@@ -238,7 +243,7 @@ export default function Painel() {
               <ReviewsPage goBack={() => setTab("Perfil")} />
             )}
             {tab === "Mensagens" && (
-              <Messages key={me.id} initialTo={messageTo} />
+              <Messages key={me.id} initialTo={messageTo} onOpen={()=>scrollRef.current?.scrollTo({y:0,animated:false})} />
             )}
             {tab === "Perfil" && (
               <Profile
@@ -261,6 +266,7 @@ export default function Painel() {
           {tabs.map((t) => (
             <TouchableOpacity
               key={t}
+              accessibilityLabel={t === "Mensagens" ? `Mensagens (${api.state?.unreadCount||0} não lidas)` : t}
               accessibilityRole="tab"
               accessibilityState={{
                 selected: tab === t || (tab === "Avaliações" && t === "Perfil"),
@@ -294,6 +300,7 @@ export default function Painel() {
                   }
                   size={22}
                 />
+                {t === "Mensagens" && !!api.state?.unreadCount && <View style={s.unreadBadge}><Text style={s.unreadText}>{api.state.unreadCount>99?"99+":api.state.unreadCount}</Text></View>}
               </View>
               <Text
                 style={[
@@ -390,20 +397,16 @@ function Search({
 }) {
   const { state, run, busy } = useSession();
   const [search, setSearch] = useState("");
-  const [onlyFavorites, setOnlyFavorites] = useState(initialFavorites);
+  const [mode,setMode]=useState(initialFavorites?"favoritos":"avulsas");
+  const onlyFavorites=mode === "favoritos";
+  const setOnlyFavorites=(value:boolean)=>setMode(value?"favoritos":"avulsas");
   const [slot, setSlot] = useState<number | null>(null);
   const [chosenDay, setChosenDay] = useState("");
   const [showDetails, setShowDetails] = useState(false);
-  const [location, setLocation] = useState("");
+  const [meetingAddress,setMeetingAddress]=useState({...emptyAddress});
   const me = state!.me!;
-  const instructors = Object.values(state!.users).filter(
-    (u) => u.role === "instrutor" && u.approval === "aprovado",
-  );
-  const visible = instructors.filter(
-    (u) =>
-      (u.name + " " + u.region).toLowerCase().includes(search.toLowerCase()) &&
-      (!onlyFavorites || (me.favorites || []).includes(u.id)),
-  );
+  const instructors=Object.values(state!.users).filter(u=>u.role === "instrutor" && u.eligible);
+  const visible=instructorList(Object.values(state!.users),mode,search,me.favorites);
   const u = selected ? state!.users[selected] : null;
   const days = Array.from({ length: 7 }, (_, i) => state!.now + i * 86400000);
   const activeDay = days.some((d) => dayKey(d) === chosenDay)
@@ -591,13 +594,7 @@ function Search({
             </Text>
           )}
           <View style={s.divider} />
-          <Input
-            label="Local da aula"
-            leadingIcon="pin"
-            placeholder="Endereço ou ponto de encontro"
-            value={location}
-            onChangeText={setLocation}
-          />
+          <AddressForm value={meetingAddress} onChange={setMeetingAddress}/>
           <View style={s.summary}>
             <View style={s.flex}>
               <Text style={s.small}>Sua aula · 60 minutos</Text>
@@ -619,7 +616,7 @@ function Search({
                 await run("book", {
                   instructor: u.id,
                   start: activeSlot,
-                  location,
+                  address:meetingAddress,
                 })
               ) {
                 setSlot(null);
@@ -641,7 +638,7 @@ function Search({
       <View style={s.welcome}>
         <Text style={s.title}>Olá, {me.name.split(" ")[0]}!</Text>
         <Text style={s.welcomeText}>
-          Encontre o instrutor ideal para suas aulas.
+          {mode === "instrutores" ? "Lista completa de profissionais aptos a receber reservas." : "Encontre o instrutor ideal para suas aulas."}
         </Text>
       </View>
       <Input
@@ -685,7 +682,7 @@ function Search({
         <TouchableOpacity
           accessibilityRole="button"
           onPress={() => {
-            setOnlyFavorites(false);
+            setMode("instrutores");
             setSearch("");
           }}
           style={s.quickFilter}
@@ -698,7 +695,7 @@ function Search({
       </View>
       <View style={s.sectionHeading}>
         <Text style={[s.cardTitle, s.flex]}>
-          {onlyFavorites ? "Seus favoritos" : "Instrutores em destaque"}
+          {mode === "instrutores" ? "Todos os instrutores aprovados" : onlyFavorites ? "Seus favoritos" : instructors.some(u=>u.featured)?"Instrutores em destaque":"Instrutores disponíveis"}
         </Text>
         <Text style={s.small}>
           {visible.length}{" "}
@@ -951,13 +948,16 @@ function Availability() {
 }
 function Bookings() {
   const { state } = useSession();
-  const list = Object.values(state!.bookings).sort((a, b) => b.start - a.start);
+  const [filter,setFilter]=useState("Todas");
+  const all=Object.values(state!.bookings).sort((a,b)=>b.start-a.start);
+  const list=all.filter(b=>matchesBooking(b,filter));
   return (
     <View style={s.gap}>
       <Heading
         title="Seus agendamentos"
         sub="Solicitações, pagamentos e histórico em um só lugar."
       />
+      <View style={s.row}>{bookingFilters.map(f=><TouchableOpacity key={f} accessibilityRole="button" accessibilityState={{selected:filter===f}} style={[s.chip,filter===f&&s.slotActive]} onPress={()=>setFilter(f)}><Text style={filter===f?s.white:s.link}>{f} ({all.filter(b=>matchesBooking(b,f)).length})</Text></TouchableOpacity>)}</View>
       {list.map((b) => (
         <BookingCard key={b.id} booking={b} />
       ))}
@@ -1265,8 +1265,8 @@ function Evidence({ booking: b }: { booking: Booking }) {
     </Card>
   );
 }
-function Messages({ initialTo }: { initialTo?: string }) {
-  const { state, run } = useSession();
+function Messages({ initialTo,onOpen }: { initialTo?: string;onOpen:()=>void }) {
+  const { state, run,busy } = useSession();
   const me = state!.me!;
   const [search, setSearch] = useState("");
   const [to, setTo] = useState(initialTo || ""),
@@ -1276,6 +1276,11 @@ function Messages({ initialTo }: { initialTo?: string }) {
     text: string;
     requestId: string;
   } | null>(null);
+  const [foreground,setForeground]=useState(AppState.currentState === "active");
+  const readAttempt=useRef("");
+  useEffect(()=>{const sub=AppState.addEventListener("change",v=>setForeground(v === "active"));return()=>sub.remove();},[]);
+  useEffect(()=>{if(to)onOpen();},[to]);
+  useEffect(()=>{if(!to||!foreground||busy)return;const ids=state!.messages.filter(m=>m.from===to && m.to===me.id && !m.readAt).map(m=>m.id);const key=ids.join(",");if(!key||readAttempt.current===key)return;readAttempt.current=key;void run("readMessages",{to,messages:ids});},[to,foreground,state?.messages,busy,me.id]);
   const participants = [
     ...new Set(
       Object.values(state!.conversations || {}).map((b) =>
@@ -1289,6 +1294,7 @@ function Messages({ initialTo }: { initialTo?: string }) {
         title="Mensagens"
         sub="Converse sobre suas aulas e o ponto de encontro."
       />
+      {!to && <>
       <Input
         leadingIcon="search"
         placeholder="Buscar conversa…"
@@ -1357,8 +1363,10 @@ function Messages({ initialTo }: { initialTo?: string }) {
           </Text>
         </Card>
       )}
+      </>}
       {!!to && (
         <Card style={s.gap}>
+          <Button title="Voltar às conversas" variant="secondary" onPress={()=>setTo("")}/>
           <View style={s.chatHeader}>
             <Avatar foto={state!.users[to]?.photoPath} nome={state!.users[to]?.name || "Participante"} size={40} />
             <View style={s.flex}>
