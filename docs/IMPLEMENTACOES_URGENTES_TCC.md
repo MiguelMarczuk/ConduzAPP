@@ -1,5 +1,7 @@
 # Implementações urgentes para 30/10/2026
 
+**Adendo de 21/10 — fotos:** após relato de falha, foram reproduzidos Firebase desligado e ausência de acesso à foto em Editar perfil. O fluxo foi corrigido e comprovado com JPEG fotográfico real nos dois perfis pendentes, incluindo recarga, logout/login e conferência de bytes/referência. Resultado novo: **52 unitários, 24 integrações, TypeScript e build aprovados**. Evidências e causa detalhada em [CORRECAO_FOTOS_PERFIL.md](CORRECAO_FOTOS_PERFIL.md). As etapas A–E abaixo permanecem como registro anterior, com seus próprios resultados.
+
 Branch `recuperacao-tcc`. Execução em etapas, somente emuladores, sem push/deploy.
 
 ## Etapa A — Fotos, identidade e autenticação

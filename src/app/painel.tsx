@@ -1795,10 +1795,20 @@ function Profile({ navigate }: { navigate?: (tab: string) => void }) {
               : "Administração"}
         </Text>
         {!!me.region && <Text style={s.profileRole}>{me.region}</Text>}
+        {me.role !== "admin" && (
+          <Button
+            title="Alterar foto"
+            variant="secondary"
+            onPress={() => setSection("identity")}
+          />
+        )}
       </View>
       {me.role !== "admin" &&
-        (section === "identity" || me.identity?.status !== "aprovado") && (
-          <IdentityPanel />
+        (["identity", "edit"].includes(section || "") ||
+          me.identity?.status !== "aprovado") && (
+          <IdentityPanel
+            photoOnly={section === "edit" && me.identity?.status === "aprovado"}
+          />
         )}
       {!section && (
         <Card style={s.menu}>

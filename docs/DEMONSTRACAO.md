@@ -1,5 +1,7 @@
 # Roteiro da apresentação — 30/10/2026
 
+Fotos: a correção de 21/10 foi comprovada com fotografia JPEG real em aluno/instrutor, após recarga e novo login. Use Perfil → Alterar foto, ou Editar perfil. Inicie também o Firebase, não somente o Expo. [Diagnóstico, evidências e passo a passo](CORRECAO_FOTOS_PERFIL.md).
+
 ## Preparar um ensaio novo
 
 Com as ferramentas portáteis já instaladas, execute na pasta do projeto:

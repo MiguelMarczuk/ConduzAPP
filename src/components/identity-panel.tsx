@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Image, View } from "react-native";
+import { Image, Platform, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { getIdTokenResult } from "firebase/auth";
-import { ref, uploadBytes } from "firebase/storage";
+import { ref, uploadBytesResumable } from "firebase/storage";
 import { auth, storage } from "@/services/firebase";
 import { useSession, dateTime, type Profile } from "@/services/session";
 import { Card } from "@/components/ui/card";
@@ -16,43 +16,102 @@ function UploadImage({ document = false }: { document?: boolean }) {
   const { run, busy } = useSession();
   const [asset, setAsset] = useState<ImagePicker.ImagePickerAsset | null>(null),
     [message, setMessage] = useState(""),
+    [progress, setProgress] = useState(""),
     [sending, setSending] = useState(false);
   async function choose() {
     setMessage("");
     try {
-      const permission =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        setMessage("Autorize o acesso à galeria para selecionar a imagem.");
-        return;
+      // No navegador, abrir o seletor diretamente no gesto do usuário.
+      // Permissão da galeria pertence ao fluxo nativo; na web ela é desnecessária.
+      if (Platform.OS !== "web") {
+        const permission =
+          await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          setMessage("Autorize o acesso à galeria para selecionar a imagem.");
+          return;
+        }
       }
       const r = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         quality: 0.75,
         allowsEditing: !document,
       });
-      if (!r.canceled) setAsset(r.assets[0]);
+      if (!r.canceled && r.assets[0]) {
+        setAsset(r.assets[0]);
+        console.info("[ConduzAPP imagem] selecionada", {
+          tipo: r.assets[0].mimeType,
+          bytes: r.assets[0].fileSize,
+          largura: r.assets[0].width,
+          altura: r.assets[0].height,
+        });
+      }
     } catch {
       setMessage("Não foi possível abrir a galeria. Tente novamente.");
     }
   }
   async function send() {
-    if (!asset || !auth.currentUser) return;
+    if (!asset) return;
+    const user = auth.currentUser;
+    if (!user) {
+      setMessage("Sua sessão terminou. Entre novamente para salvar a foto.");
+      return;
+    }
     setSending(true);
     setMessage("");
+    setProgress("Preparando imagem…");
     try {
-      const blob = await (await fetch(asset.uri)).blob();
+      // ImagePicker web fornece o File original; blob: é somente a prévia.
+      const blob = asset.file || (await (await fetch(asset.uri)).blob());
       const type = asset.mimeType || blob.type;
       if (
         !["image/jpeg", "image/png", "image/webp"].includes(type) ||
+        blob.size === 0 ||
         blob.size >= 5 * 1024 * 1024
       )
         throw Error("Use JPEG, PNG ou WebP menor que 5 MB.");
-      const token = await getIdTokenResult(auth.currentUser);
+      const token = await getIdTokenResult(user);
       const scope = String(token.claims.stateScope || "state");
       const prefix = document ? "identityDocuments" : "profilePhotos";
-      const path = `${prefix}/${scope}/${auth.currentUser.uid}/${Date.now()}-${Math.random().toString(36).slice(2)}.image`;
-      await uploadBytes(ref(storage, path), blob, { contentType: type });
+      const path = `${prefix}/${scope}/${user.uid}/${Date.now()}-${Math.random().toString(36).slice(2)}.image`;
+      const upload = uploadBytesResumable(ref(storage, path), blob, {
+        contentType: type,
+      });
+      let timedOut = false;
+      // O retry padrão do SDK pode aguardar minutos quando o emulador está fora.
+      const timeout = setTimeout(() => {
+        timedOut = true;
+        upload.cancel();
+      }, 30000);
+      const unsubscribe = upload.on(
+        "state_changed",
+        (snapshot) => {
+          setProgress(
+            `Enviando imagem: ${Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)}%`,
+          );
+        },
+        () => {},
+      );
+      try {
+        await upload;
+      } catch (error) {
+        if (timedOut)
+          throw Error(
+            "O Storage não respondeu em 30 segundos. Execute Iniciar-ConduzAPP.ps1, aguarde todos os emuladores e tente salvar novamente.",
+          );
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+        unsubscribe();
+      }
+      console.info("[ConduzAPP imagem] upload concluído", {
+        tipo: type,
+        bytes: blob.size,
+      });
+      if (auth.currentUser?.uid !== user.uid)
+        throw Error(
+          "Sua sessão mudou. Entre novamente antes de salvar a foto.",
+        );
+      setProgress("Imagem enviada. Validando e salvando no perfil…");
       if (await run(document ? "submitIdentity" : "setPhoto", { path })) {
         setAsset(null);
         setMessage(
@@ -60,15 +119,29 @@ function UploadImage({ document = false }: { document?: boolean }) {
             ? "Documento fictício enviado para análise manual."
             : "Foto atualizada e salva.",
         );
+        console.info("[ConduzAPP imagem] referência persistida no perfil");
+      } else {
+        setMessage(
+          "A imagem foi enviada, mas não foi possível confirmar o salvamento do perfil. Atualize a página para conferir e veja o aviso no topo antes de tentar novamente.",
+        );
       }
     } catch (e) {
+      const code = (e as { code?: string })?.code;
+      console.warn("[ConduzAPP imagem] falha no envio ou na gravação", {
+        codigo: code || "erro-local",
+      });
       setMessage(
-        e instanceof Error && !e.message.includes("Firebase")
-          ? e.message
-          : "Não foi possível enviar a imagem. Confira a conexão e tente novamente.",
+        code === "storage/unauthorized"
+          ? "Envio não autorizado. Entre novamente e confira se o arquivo pertence ao seu perfil."
+          : code === "storage/unauthenticated"
+            ? "Sua sessão terminou. Entre novamente para enviar a imagem."
+            : e instanceof Error && !e.message.includes("Firebase")
+              ? e.message
+              : "Não foi possível enviar a imagem. Confira a conexão e os emuladores locais e tente novamente.",
       );
     } finally {
       setSending(false);
+      setProgress("");
     }
   }
   return (
@@ -85,6 +158,13 @@ function UploadImage({ document = false }: { document?: boolean }) {
       />
       {asset && (
         <>
+          <Text style={s.small}>
+            {asset.fileName || "Imagem selecionada"} ·{" "}
+            {asset.mimeType || "imagem"}
+            {asset.fileSize
+              ? ` · ${(asset.fileSize / 1024 / 1024).toFixed(2)} MB`
+              : ""}
+          </Text>
           <Image
             accessibilityLabel="Prévia da imagem selecionada"
             source={{ uri: asset.uri }}
@@ -106,17 +186,20 @@ function UploadImage({ document = false }: { document?: boolean }) {
           />
         </>
       )}
+      {!!progress && <Text accessibilityLiveRegion="polite">{progress}</Text>}
       {!!message && <Text accessibilityRole="alert">{message}</Text>}
     </View>
   );
 }
-export function IdentityPanel() {
+export function IdentityPanel({ photoOnly = false }: { photoOnly?: boolean }) {
   const { state, run, busy } = useSession(),
     me = state!.me!;
   const identity = me.identity;
   return (
     <Card style={s.gap}>
-      <Text style={s.cardTitle}>Foto e verificação de identidade</Text>
+      <Text style={s.cardTitle}>
+        {photoOnly ? "Foto de perfil" : "Foto e verificação de identidade"}
+      </Text>
       <Text style={s.muted}>
         Análise manual simulada. Use somente imagens e documentos fictícios no
         TCC.
@@ -142,23 +225,25 @@ export function IdentityPanel() {
           onPress={() => run("removePhoto")}
         />
       )}
-      {!!identity?.submittedAt && (
+      {!photoOnly && !!identity?.submittedAt && (
         <Text>Enviado em {dateTime(identity.submittedAt)}</Text>
       )}
-      {identity?.documentPath && (
+      {!photoOnly && identity?.documentPath && (
         <StoredImage
           path={identity.documentPath}
           label="Documento fictício privado enviado"
           style={{ width: "100%", height: 180, resizeMode: "contain" }}
         />
       )}
-      {identity?.reason && <Text>Parecer: {identity.reason}</Text>}
-      {identity?.reviewedAt && (
+      {!photoOnly && identity?.reason && (
+        <Text>Parecer: {identity.reason}</Text>
+      )}
+      {!photoOnly && identity?.reviewedAt && (
         <Text style={s.small}>
           Decisão registrada em {dateTime(identity.reviewedAt)}
         </Text>
       )}
-      <UploadImage document />
+      {!photoOnly && <UploadImage document />}
     </Card>
   );
 }

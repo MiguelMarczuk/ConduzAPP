@@ -275,6 +275,70 @@ test("instrutor também publica foto própria sem poder publicar arquivo de outr
   assert.equal(r.result.me.photoPath, path);
   assert.ok((await call("aluno", "setPhoto", { path })).error);
 });
+test("aluno e instrutor pendentes enviam JPEG e a referência persiste após nova autenticação", async () => {
+  const jpeg = await adminRequire("sharp")({
+    create: { width: 32, height: 32, channels: 3, background: "#2255aa" },
+  })
+    .jpeg()
+    .toBuffer();
+  for (const role of ["aluno", "instrutor"]) {
+    const uid = users[role].uid;
+    await stateRef.update({
+      [`users.${uid}.identity`]: { status: "nao_enviada" },
+      [`users.${uid}.photoPath`]: null,
+    });
+    const path = `profilePhotos/${scope}/${uid}/pending-${role}.jpg`;
+    const owner = env
+      .authenticatedContext(uid, { stateScope: scope })
+      .storage("gs://demo-conduzapp.appspot.com");
+    await assertSucceeds(
+      uploadBytes(ref(owner, path), jpeg, { contentType: "image/jpeg" }),
+    );
+    const saved = await call(role, "setPhoto", { path });
+    assert.ok(saved.result, JSON.stringify(saved));
+    assert.equal(saved.result.me.identity.status, "nao_enviada");
+    assert.equal(saved.result.me.photoPath, path);
+    const profile = (await stateRef.get()).data().users[uid];
+    assert.equal(profile.photoPath, path);
+    assert.equal(typeof profile.photoPath, "string");
+    assert.ok(
+      !profile.photoPath.startsWith("data:") &&
+        !profile.photoPath.startsWith("blob:"),
+    );
+    assert.deepEqual(Buffer.from(await getBytes(ref(owner, path))), jpeg);
+    const account = await getAuth().getUser(uid);
+    const login = await fetch(
+      "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: account.email,
+          password: "TestTCC2026!",
+          returnSecureToken: true,
+        }),
+      },
+    );
+    const authentication = await login.json();
+    assert.equal(authentication.localId, uid);
+    const response = await fetch(
+      "http://127.0.0.1:5001/demo-conduzapp/us-central1/conduz",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authentication.idToken}`,
+        },
+        body: JSON.stringify({ data: { op: "state", input: {} } }),
+      },
+    );
+    const reloaded = await response.json();
+    assert.equal(reloaded.result.me.photoPath, path);
+    assert.equal(reloaded.result.me.identity.status, "nao_enviada");
+    assert.ok((await call("outro", "setPhoto", { path })).error);
+  }
+});
+
 test("mensagens não lidas e endereço estruturado persistem com autorização", async () => {
   await call("aluno", "message", {
     to: users.instrutor.uid,

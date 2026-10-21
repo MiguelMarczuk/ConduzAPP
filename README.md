@@ -44,7 +44,7 @@ Com os emuladores ativos:
 powershell -ExecutionPolicy Bypass -File .\scripts\Verificar.ps1
 ```
 
-Os testes de integração usam contas temporárias e um documento isolado por execução; não substituem a base usada pelo aplicativo. A verificação atual inclui **52 testes unitários, 23 integrações/autorização, TypeScript e build web**. Resultado das implementações urgentes e limites do ensaio: [relatório](docs/IMPLEMENTACOES_URGENTES_TCC.md).
+Os testes de integração usam contas temporárias e um documento isolado por execução; não substituem a base usada pelo aplicativo. A verificação atual inclui **52 testes unitários, 24 integrações/autorização, TypeScript e build web**. Resultado das implementações urgentes e limites do ensaio: [relatório](docs/IMPLEMENTACOES_URGENTES_TCC.md). Correção e comprovação de fotos reais após recarga/login: [fotos de perfil](docs/CORRECAO_FOTOS_PERFIL.md).
 
 Com Node 22 e npm no PATH também é possível executar `npm test`, `npm run typecheck`, `npm run test:emulators` e `npm run build:web`.
 

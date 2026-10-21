@@ -1,0 +1,26 @@
+[
+  {
+    "role": "aluno",
+    "uid": "demo-aluno",
+    "firestoreDocument": "private/state",
+    "photoPath": "profilePhotos/state/demo-aluno/1792573427376-3xjn4rbb6hq.image",
+    "ownedPath": true,
+    "object": {
+      "bytes": 2803917,
+      "contentType": "image/jpeg",
+      "sha256": "c6f91a01bd0688c83088def88e48d94da65731e351370e22ea359f687f13cbf1"
+    }
+  },
+  {
+    "role": "instrutor",
+    "uid": "demo-instrutor",
+    "firestoreDocument": "private/state",
+    "photoPath": "profilePhotos/state/demo-instrutor/1792573581883-4fxys6biz9h.image",
+    "ownedPath": true,
+    "object": {
+      "bytes": 2803917,
+      "contentType": "image/jpeg",
+      "sha256": "c6f91a01bd0688c83088def88e48d94da65731e351370e22ea359f687f13cbf1"
+    }
+  }
+]

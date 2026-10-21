@@ -57,6 +57,8 @@ As seções anteriores deste arquivo descrevem a recuperação original; suas qu
 
 ## Implementações urgentes — nova validação
 
+Adendo de 21/10: a correção de fotos passou com **52 unitários, 24 integrações, TypeScript e build**, mais upload de fotografia JPEG pelo navegador em aluno e instrutor pendentes, persistindo após recarga e novo login. Ver [comprovação e causa](CORRECAO_FOTOS_PERFIL.md). Os resultados 52/23 abaixo são do checkpoint A–E anterior.
+
 - **52/52 unitários**: domínio, cenários e helpers, incluindo fotos/identidade, mensagens, filtros/busca/CEP, duas aulas e início.
 - **23/23 integrações/autorização**: emuladores reais, Storage, callable, transações/concorrência e regras de acesso.
 - **TypeScript e build web aprovados**, 23 rotas. Verificador padrão inclui a nova suíte de funcionalidades.
