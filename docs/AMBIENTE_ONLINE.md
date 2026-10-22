@@ -1,6 +1,8 @@
 # Ambiente compartilhado da apresentação
 
-Status: **preparação de código; conta Google, projeto, faturamento, deploy e validação em dispositivos ainda pendentes**. Nenhuma base online ou faturamento foi criado automaticamente.
+Status em 21/10/2026: **login Google concluído e projeto `conduzapp-d9beb` identificado; o responsável optou por evitar faturamento**. O caminho Blaze descrito abaixo permanece inativo. Nenhum deploy, ativação de faturamento ou migração de dados foi executado. A alternativa gratuita aguarda escolha de hospedagem/rede; veja [opções sem faturamento](OPCOES_SEM_FATURAMENTO.md).
+
+Inspeção somente de leitura: projeto ativo `ConduzAPP`, Auth por E-mail/Senha habilitado, Firestore nativo em `southamerica-east1`, coleções antigas `agendamentos`, `alunos` e `instrutores`. O faturamento está desativado; APIs de Functions e Firebase Storage não estão habilitadas. As regras atuais e a configuração web foram copiadas para backup local ignorado pelo Git. O projeto antigo e os dados existentes foram preservados; não aplicar `firestore.rules` sobre ele automaticamente.
 
 O GitHub `MiguelMarczuk/ConduzAPP` foi tornado público a pedido do responsável. A revisão abrangeu 25 commits e 431 blobs, sem credenciais privadas identificadas. As 22 ocorrências de senhas literais são exclusivas dos testes/emuladores e não serão usadas online. Repositório público não torna o banco público.
 
@@ -17,7 +19,7 @@ O GitHub `MiguelMarczuk/ConduzAPP` foi tornado público a pedido do responsável
 
 ## Antes de publicar
 
-Entre em https://console.firebase.google.com/ com a conta Google do TCC. Se existir projeto antigo, inspecione antes de usar. Prefira um projeto dedicado à apresentação, sem dados de produção.
+O login no Firebase CLI foi concluído e o projeto antigo já foi inspecionado sem alterar seus dados. Prefira um cenário dedicado à apresentação; qualquer novo destino precisa preservar as coleções antigas e suas permissões. Não é necessário refazer o login enquanto a sessão estiver válida.
 
 Functions e Storage online exigem o plano Blaze vinculado a faturamento. Existem franquias gratuitas, mas não é possível garantir custo zero. A ativação deve ser revisada e concluída pelo responsável; os scripts apenas verificam se já está habilitada. Alertas de orçamento não são teto rígido de gastos.
 
@@ -64,7 +66,7 @@ O build online é separado do servidor local. Publicar só o frontend não dispo
 4. Acesso anônimo, conta sem convite e terceiros não obtêm documentos/avaliações privadas/evidências.
 5. Relógio do ensaio permite demonstrar código e conclusão; restaurar depois. Conferir datas antes de 30/10.
 
-Testes locais e builds não comprovam uma publicação online. Projeto, provisionamento, deploy e essa validação externa continuam pendentes. Não foi alterada a branch `main` nem a base principal dos emuladores.
+Testes locais e builds não comprovam uma publicação online. O destino gratuito, seu provisionamento, deploy e validação externa continuam pendentes. O uso de Blaze foi recusado pelo responsável. Não foi alterada a branch `main` nem a base principal dos emuladores.
 
 ## Verificações executadas na preparação
 
@@ -73,4 +75,4 @@ Testes locais e builds não comprovam uma publicação online. Projeto, provisio
 - TypeScript e build web local aprovados, com 23 rotas.
 - Build `cloud-demo` aprovado com configuração fictícia e sem deploy, com 23 rotas. Isso valida a compilação da variante online, não o acesso a um projeto real.
 - Sintaxe dos scripts PowerShell de build/deploy validada.
-- Arquivos de configuração real, credenciais e snapshots continuam ignorados pelo Git. As contas online não foram criadas porque o login Google ainda está pendente.
+- Arquivos de configuração real, credenciais, backup das regras e snapshots continuam ignorados pelo Git. O login Google está concluído; as novas contas online ainda não foram criadas porque o destino gratuito está sendo definido.
