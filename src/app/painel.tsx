@@ -152,7 +152,7 @@ export default function Painel() {
     return (
       <View style={s.center}>
         <ActivityIndicator />
-        <Text>Conectando ao ambiente local…</Text>
+        <Text>Conectando ao ConduzAPP…</Text>
       </View>
     );
   if (!api.user)

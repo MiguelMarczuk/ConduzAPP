@@ -1,5 +1,5 @@
 "use strict";
-// A claim é emitida apenas pelo Admin SDK nos emuladores, nunca pelo formulário.
+// A claim é emitida apenas pelo Admin SDK, nunca pelo formulário.
 // Testes e ensaios usam documentos próprios e preservam private/state.
 function statePath(token = {}) {
   if (token.stateScope === undefined) return "private/state";
@@ -11,10 +11,10 @@ function effectiveNow(
   state,
   token,
   realNow,
-  emulator = process.env.FUNCTIONS_EMULATOR === "true",
+  demoClockAllowed = process.env.FUNCTIONS_EMULATOR === "true",
 ) {
   const scope = token?.stateScope;
-  return emulator &&
+  return demoClockAllowed &&
     /^demo-[a-zA-Z0-9-]{1,80}$/.test(scope || "") &&
     state.demo?.scope === scope &&
     Number.isFinite(state.demo.clockOffset) &&

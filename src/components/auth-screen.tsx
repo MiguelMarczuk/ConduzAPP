@@ -7,7 +7,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
-import { auth } from "@/services/firebase";
+import { auth, cloudDemo } from "@/services/firebase";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "@/services/firebase";
 import { useSession } from "@/services/session";
@@ -36,6 +36,12 @@ export function AuthScreen({
     [busy, setBusy] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
   async function submit() {
+    if (cloudDemo && signup) {
+      setError(
+        "Use uma conta fornecida pelo responsável pela demonstração online.",
+      );
+      return;
+    }
     const invalid = authFields(email, password, signup, name);
     if (invalid) {
       setError(invalid);
@@ -160,19 +166,26 @@ export function AuthScreen({
               <Text style={s.subtitle}>ou</Text>
               <View style={s.line} />
             </View>
-            <Button
-              title={signup ? "Voltar ao login" : "Criar conta"}
-              variant="secondary"
-              onPress={() =>
-                router.push(
-                  signup
-                    ? "/"
-                    : role === "instrutor"
-                      ? "/cadastro-instrutor"
-                      : "/cadastro-aluno",
-                )
-              }
-            />
+            {(!cloudDemo || signup) && (
+              <Button
+                title={signup ? "Voltar ao login" : "Criar conta"}
+                variant="secondary"
+                onPress={() =>
+                  router.push(
+                    signup
+                      ? "/"
+                      : role === "instrutor"
+                        ? "/cadastro-instrutor"
+                        : "/cadastro-aluno",
+                  )
+                }
+              />
+            )}
+            {cloudDemo && (
+              <Text style={s.subtitle}>
+                Demonstração online: entre com a conta fornecida ao seu grupo.
+              </Text>
+            )}
             {!signup && (
               <TouchableOpacity
                 accessibilityRole="button"
@@ -203,7 +216,7 @@ export function AuthScreen({
               />
             )}
           </Card>
-          {!signup && (
+          {!signup && !cloudDemo && (
             <View style={s.demo}>
               <TouchableOpacity
                 accessibilityRole="button"
@@ -248,8 +261,8 @@ export function AuthScreen({
             </View>
           )}
           <Text style={s.foot}>
-            DEMONSTRAÇÃO LOCAL · TCC 2026{"\n"}Pagamentos e estornos
-            exclusivamente simulados.
+            DEMONSTRAÇÃO {cloudDemo ? "ONLINE" : "LOCAL"} · TCC 2026{"\n"}
+            Pagamentos e estornos exclusivamente simulados.
           </Text>
         </View>
       </ScrollView>

@@ -3,24 +3,25 @@ import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 import { connectAuthEmulator, getAuth } from "firebase/auth";
 import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
 import { connectStorageEmulator, getStorage } from "firebase/storage";
+import { firebaseSettings } from "@/lib/firebase-config";
 
-// Este checkout só usa emuladores. Nenhuma configuração de produção.
-const app = getApps().length
-  ? getApp()
-  : initializeApp({
-      apiKey: "demo-conduzapp-key",
-      authDomain: "demo-conduzapp.firebaseapp.com",
-      projectId: "demo-conduzapp",
-      storageBucket: "demo-conduzapp.appspot.com",
-      appId: "demo-conduzapp",
-    });
+const settings = firebaseSettings({
+  mode: process.env.EXPO_PUBLIC_FIREBASE_MODE,
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+});
+export const cloudDemo = settings.mode === "cloud-demo";
+const app = getApps().length ? getApp() : initializeApp(settings.config);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const functions = getFunctions(app, "us-central1");
 export const storage = getStorage(app);
 const host = process.env.EXPO_PUBLIC_EMULATOR_HOST || "127.0.0.1";
 const state = globalThis as typeof globalThis & { conduzemulators?: boolean };
-if (!state.conduzemulators) {
+if (!cloudDemo && !state.conduzemulators) {
   connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
   connectFirestoreEmulator(db, host, 8080);
   connectFunctionsEmulator(functions, host, 5001);

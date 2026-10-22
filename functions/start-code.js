@@ -111,7 +111,7 @@ function confirmStart(b, actor, input, now) {
 function setDemoClock(s, actor, input, now, trusted) {
   if (
     !actor.admin ||
-    !trusted.emulator ||
+    (!trusted.emulator && !trusted.cloudDemo) ||
     !trusted.demoScope?.startsWith("demo-") ||
     s.demo?.scope !== trusted.demoScope
   )

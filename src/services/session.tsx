@@ -7,7 +7,7 @@ import {
 } from "react";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
-import { auth, functions } from "./firebase";
+import { auth, functions, cloudDemo } from "./firebase";
 export type Profile = {
   id: string;
   name: string;
@@ -177,7 +177,9 @@ export function Session({ children }: { children: ReactNode }) {
     } catch {
       if (auth.currentUser?.uid !== uid) return;
       setError(
-        "Não foi possível conectar aos emuladores. Execute Iniciar-ConduzAPP.ps1 e aguarde o Firebase.",
+        cloudDemo
+          ? "Não foi possível acessar a demonstração online. Confira a conexão e se sua conta foi habilitada pelo responsável."
+          : "Não foi possível conectar aos emuladores. Execute Iniciar-ConduzAPP.ps1 e aguarde o Firebase.",
       );
     }
   }

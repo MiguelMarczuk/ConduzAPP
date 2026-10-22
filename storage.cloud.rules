@@ -1,0 +1,36 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function invited() {
+      return request.auth != null
+        && request.auth.token.conduzDemo == true
+        && request.auth.token.stateScope.matches('demo-[a-zA-Z0-9-]{1,80}');
+    }
+    function sameScope(scope) { return invited() && scope == request.auth.token.stateScope; }
+    function imageUpload() {
+      return request.resource.size > 0 && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+    function admin() { return invited() && request.auth.token.admin == true; }
+    match /profilePhotos/{scope}/{owner}/{file} {
+      allow read: if sameScope(scope);
+      allow create: if resource == null && sameScope(scope) && request.auth.uid == owner && imageUpload();
+      allow update, delete: if false;
+    }
+    match /identityDocuments/{scope}/{owner}/{file} {
+      allow read: if sameScope(scope) && (request.auth.uid == owner || admin());
+      allow create: if resource == null && sameScope(scope) && request.auth.uid == owner && imageUpload();
+      allow update, delete: if false;
+    }
+    function bookingAccess(booking) { return firestore.get(/databases/(default)/documents/bookingAccess/$(booking)).data; }
+    function participant(b) { return invited() && b.scope == request.auth.token.stateScope && (request.auth.uid == b.student || request.auth.uid == b.instructor); }
+    match /disputes/{booking}/{owner}/{file} {
+      allow read: if invited() && bookingAccess(booking).scope == request.auth.token.stateScope
+        && (admin() || participant(bookingAccess(booking)));
+      allow create: if invited() && request.auth.uid == owner
+        && participant(bookingAccess(booking)) && bookingAccess(booking).disputeOpen == true && imageUpload();
+      allow update, delete: if false;
+    }
+    match /{allPaths=**} { allow read, write: if false; }
+  }
+}
